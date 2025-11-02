@@ -3310,3 +3310,371 @@ Recently saved records:
 2025-11-02 20:36:02,488 - werkzeug - INFO -  * Detected change in 'C:\\Users\\HP\\Desktop\\X Fin Dataset\\backend\\nse_option_chain_collector.py', reloading
 2025-11-02 20:36:02,489 - werkzeug - INFO -  * Detected change in 'C:\\Users\\HP\\Desktop\\X Fin Dataset\\backend\\nse_option_chain_collector.py', reloading
 2025-11-02 20:36:03,521 - werkzeug - INFO -  * Restarting with watchdog (windowsapi)
+2025-11-02 20:36:06,938 - werkzeug - WARNING -  * Debugger is active!
+2025-11-02 20:36:06,947 - werkzeug - INFO -  * Debugger PIN: 990-408-580
+2025-11-02 20:36:09,895 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:09] "GET /api/option-chain/status HTTP/1.1" 200 -
+2025-11-02 20:36:09,898 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:09] "GET /api/status HTTP/1.1" 200 -
+2025-11-02 20:36:10,526 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:10,616 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:10,634 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:10,663 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:10,677 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:10,697 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:10] "GET /api/banknifty/status HTTP/1.1" 200 -
+2025-11-02 20:36:10,699 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:10,699 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:10] "GET /api/data HTTP/1.1" 200 -
+2025-11-02 20:36:10,700 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:10,702 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:10,703 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:10] "GET /api/banknifty/data HTTP/1.1" 200 -
+2025-11-02 20:36:10,704 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:10,706 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:10] "GET /api/option-chain/stats HTTP/1.1" 200 -
+2025-11-02 20:36:10,710 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:10] "GET /api/stats HTTP/1.1" 200 -
+2025-11-02 20:36:10,713 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:10,719 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:10] "GET /api/option-chain/data HTTP/1.1" 200 -
+2025-11-02 20:36:11,138 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:11,332 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:11,380 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:11] "GET /api/banknifty/stats HTTP/1.1" 200 -
+2025-11-02 20:36:11,486 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:11,492 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:11,493 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:11] "GET /api/news/status HTTP/1.1" 200 -
+2025-11-02 20:36:11,499 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:11,504 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:11] "GET /api/news/data HTTP/1.1" 200 -
+2025-11-02 20:36:11,662 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:11,664 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:11] "GET /api/news/stats HTTP/1.1" 200 -
+2025-11-02 20:36:27,363 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:27,363 - nse_news_collector - INFO - Starting news collection...
+2025-11-02 20:36:27,364 - nse_news_collector - INFO - Fetching news for keyword: HDFC Bank
+2025-11-02 20:36:28,913 - nse_news_collector - INFO - Found 1 news items for HDFC Bank
+2025-11-02 20:36:28,914 - nse_news_collector - INFO - Fetching news for keyword: ICICI Bank
+2025-11-02 20:36:29,801 - nse_news_collector - INFO - Found 4 news items for ICICI Bank
+2025-11-02 20:36:29,802 - nse_news_collector - INFO - Fetching news for keyword: Axis Bank
+2025-11-02 20:36:30,779 - nse_news_collector - INFO - Found 0 news items for Axis Bank
+2025-11-02 20:36:30,780 - nse_news_collector - INFO - Fetching news for keyword: Kotak Mahindra Bank
+2025-11-02 20:36:31,486 - nse_news_collector - INFO - Found 0 news items for Kotak Mahindra Bank
+2025-11-02 20:36:31,487 - nse_news_collector - INFO - Fetching news for keyword: SBI
+2025-11-02 20:36:32,348 - nse_news_collector - INFO - Found 14 news items for SBI
+2025-11-02 20:36:32,350 - nse_news_collector - INFO - Fetching news for keyword: IndusInd Bank
+2025-11-02 20:36:33,146 - nse_news_collector - INFO - Found 3 news items for IndusInd Bank
+2025-11-02 20:36:33,147 - nse_news_collector - INFO - Fetching news for keyword: Federal Bank
+2025-11-02 20:36:33,984 - nse_news_collector - INFO - Found 1 news items for Federal Bank
+2025-11-02 20:36:33,988 - nse_news_collector - INFO - Fetching news for keyword: Bank of Baroda
+2025-11-02 20:36:35,426 - nse_news_collector - INFO - Found 3 news items for Bank of Baroda
+2025-11-02 20:36:35,427 - nse_news_collector - INFO - Fetching news for keyword: PNB
+2025-11-02 20:36:36,774 - nse_news_collector - INFO - Found 0 news items for PNB
+2025-11-02 20:36:36,775 - nse_news_collector - INFO - Fetching news for keyword: IDFC First Bank
+2025-11-02 20:36:38,409 - nse_news_collector - INFO - Found 0 news items for IDFC First Bank
+2025-11-02 20:36:38,410 - nse_news_collector - INFO - Fetching news for keyword: AU Small Finance Bank
+2025-11-02 20:36:39,927 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:40,018 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:40,103 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:40,161 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:40] "GET /api/data HTTP/1.1" 200 -
+2025-11-02 20:36:40,345 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:40,392 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:40] "GET /api/stats HTTP/1.1" 200 -
+2025-11-02 20:36:40,488 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:40,656 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:40] "GET /api/status HTTP/1.1" 200 -
+2025-11-02 20:36:41,003 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:41] "GET /api/option-chain/status HTTP/1.1" 200 -
+2025-11-02 20:36:41,013 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:41,076 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:41] "GET /api/option-chain/data HTTP/1.1" 200 -
+2025-11-02 20:36:41,276 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:41,502 - nse_news_collector - INFO - Found 0 news items for AU Small Finance Bank
+2025-11-02 20:36:41,527 - nse_news_collector - INFO - Fetching news for keyword: IDBI Bank
+2025-11-02 20:36:41,540 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:41,698 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:41] "GET /api/option-chain/stats HTTP/1.1" 200 -
+2025-11-02 20:36:41,819 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:41] "GET /api/banknifty/status HTTP/1.1" 200 -
+2025-11-02 20:36:42,035 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:42,114 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:42,146 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:42,190 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:42] "GET /api/banknifty/data HTTP/1.1" 200 -
+2025-11-02 20:36:42,254 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:42,271 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:42] "GET /api/banknifty/stats HTTP/1.1" 200 -
+2025-11-02 20:36:42,401 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:42] "GET /api/news/status HTTP/1.1" 200 -
+2025-11-02 20:36:42,408 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:42,410 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:36:42,413 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:42,417 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:42] "GET /api/news/data HTTP/1.1" 200 -
+2025-11-02 20:36:42,427 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:36:42,430 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:36:42] "GET /api/news/stats HTTP/1.1" 200 -
+2025-11-02 20:36:43,403 - nse_news_collector - INFO - Found 0 news items for IDBI Bank
+2025-11-02 20:36:43,405 - nse_news_collector - INFO - Fetching news for keyword: Nifty 50
+2025-11-02 20:36:45,066 - nse_news_collector - INFO - Found 4 news items for Nifty 50
+2025-11-02 20:36:45,067 - nse_news_collector - INFO - Fetching news for keyword: Bank Nifty
+2025-11-02 20:36:46,527 - nse_news_collector - INFO - Found 3 news items for Bank Nifty
+2025-11-02 20:36:46,528 - nse_news_collector - INFO - Fetching news for keyword: RBI
+2025-11-02 20:36:47,984 - nse_news_collector - INFO - Found 8 news items for RBI
+2025-11-02 20:36:47,985 - nse_news_collector - INFO - Fetching news for keyword: Monetary Policy
+2025-11-02 20:36:51,785 - nse_news_collector - INFO - Found 5 news items for Monetary Policy
+2025-11-02 20:36:51,787 - nse_news_collector - INFO - Fetching news for keyword: Repo Rate
+2025-11-02 20:36:53,429 - nse_news_collector - INFO - Found 0 news items for Repo Rate
+2025-11-02 20:36:53,430 - nse_news_collector - INFO - Fetching news for keyword: Inflation India
+2025-11-02 20:36:54,638 - nse_news_collector - INFO - Found 0 news items for Inflation India
+2025-11-02 20:36:54,639 - nse_news_collector - INFO - Fetching news for keyword: GDP India
+2025-11-02 20:36:56,146 - nse_news_collector - INFO - Found 1 news items for GDP India
+2025-11-02 20:36:56,147 - nse_news_collector - INFO - Fetching news for keyword: SEBI
+2025-11-02 20:36:57,761 - nse_news_collector - INFO - Found 4 news items for SEBI
+2025-11-02 20:36:57,762 - nse_news_collector - INFO - Fetching news for keyword: Union Budget India
+2025-11-02 20:36:59,255 - nse_news_collector - INFO - Found 0 news items for Union Budget India
+2025-11-02 20:36:59,255 - nse_news_collector - INFO - Fetching news for keyword: NBFC
+2025-11-02 20:37:00,736 - nse_news_collector - INFO - Found 1 news items for NBFC
+2025-11-02 20:37:00,737 - nse_news_collector - INFO - Fetching news for keyword: Fiscal Deficit
+2025-11-02 20:37:02,144 - nse_news_collector - INFO - Found 2 news items for Fiscal Deficit
+2025-11-02 20:37:02,145 - nse_news_collector - INFO - Fetching news for keyword: Credit Growth India
+2025-11-02 20:37:03,820 - nse_news_collector - INFO - Found 0 news items for Credit Growth India
+2025-11-02 20:37:03,821 - nse_news_collector - INFO - Fetching news for keyword: US Federal Reserve
+2025-11-02 20:37:05,092 - nse_news_collector - INFO - Found 0 news items for US Federal Reserve
+2025-11-02 20:37:05,093 - nse_news_collector - INFO - Fetching news for keyword: US Inflation
+2025-11-02 20:37:06,626 - nse_news_collector - INFO - Found 1 news items for US Inflation
+2025-11-02 20:37:06,627 - nse_news_collector - INFO - Fetching news for keyword: Crude Oil Prices
+2025-11-02 20:37:08,497 - nse_news_collector - INFO - Found 2 news items for Crude Oil Prices
+2025-11-02 20:37:08,662 - nse_news_collector - INFO - Fetching news for keyword: USD INR
+2025-11-02 20:37:09,721 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:09,937 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:09,987 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:09] "GET /api/data HTTP/1.1" 200 -
+2025-11-02 20:37:10,001 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:10] "GET /api/status HTTP/1.1" 200 -
+2025-11-02 20:37:10,031 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:10] "GET /api/option-chain/status HTTP/1.1" 200 -
+2025-11-02 20:37:10,031 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:10,032 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:10,082 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:10,142 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:10] "GET /api/option-chain/data HTTP/1.1" 200 -
+2025-11-02 20:37:10,250 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:10,266 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:10] "GET /api/stats HTTP/1.1" 200 -
+2025-11-02 20:37:10,684 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:10,835 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:10,996 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:10,997 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:10] "GET /api/banknifty/status HTTP/1.1" 200 -
+2025-11-02 20:37:11,024 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:11] "GET /api/banknifty/data HTTP/1.1" 200 -
+2025-11-02 20:37:11,039 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:11,099 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:11,144 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:11] "GET /api/option-chain/stats HTTP/1.1" 200 -
+2025-11-02 20:37:11,272 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:11,286 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:11] "GET /api/banknifty/stats HTTP/1.1" 200 -
+2025-11-02 20:37:11,503 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:11] "GET /api/news/status HTTP/1.1" 200 -
+2025-11-02 20:37:11,541 - nse_news_collector - INFO - Found 0 news items for USD INR
+2025-11-02 20:37:11,550 - nse_news_collector - INFO - Fetching news for keyword: Global Recession
+2025-11-02 20:37:11,551 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:11,653 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:11,657 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:11] "GET /api/news/data HTTP/1.1" 200 -
+2025-11-02 20:37:11,657 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:11,676 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:11,677 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:11] "GET /api/news/stats HTTP/1.1" 200 -
+2025-11-02 20:37:13,311 - nse_news_collector - INFO - Found 6 news items for Global Recession
+2025-11-02 20:37:13,312 - nse_news_collector - INFO - Fetching news for keyword: China Economy
+2025-11-02 20:37:15,064 - nse_news_collector - INFO - Found 4 news items for China Economy
+2025-11-02 20:37:15,064 - nse_news_collector - INFO - Fetching news for keyword: Dollar Index
+2025-11-02 20:37:16,463 - nse_news_collector - INFO - Found 0 news items for Dollar Index
+2025-11-02 20:37:16,464 - nse_news_collector - INFO - Fetching news for keyword: Bond Yield
+2025-11-02 20:37:18,779 - nse_news_collector - INFO - Found 0 news items for Bond Yield
+2025-11-02 20:37:18,779 - nse_news_collector - INFO - Fetching news for keyword: FII Activity India
+2025-11-02 20:37:20,612 - nse_news_collector - INFO - Found 2 news items for FII Activity India
+2025-11-02 20:37:20,613 - nse_news_collector - INFO - Fetching news for keyword: DII Activity India
+2025-11-02 20:37:21,771 - nse_news_collector - INFO - Found 0 news items for DII Activity India
+2025-11-02 20:37:21,772 - nse_news_collector - INFO - Fetching news for keyword: Foreign Investment India
+2025-11-02 20:37:23,572 - nse_news_collector - INFO - Found 8 news items for Foreign Investment India
+2025-11-02 20:37:23,574 - nse_news_collector - INFO - Fetching news for keyword: Sensex
+2025-11-02 20:37:25,259 - nse_news_collector - INFO - Found 1 news items for Sensex
+2025-11-02 20:37:25,261 - nse_news_collector - INFO - Fetching news for keyword: NSE
+2025-11-02 20:37:27,068 - nse_news_collector - INFO - Found 9 news items for NSE
+2025-11-02 20:37:27,069 - nse_news_collector - INFO - Fetching news for keyword: BSE
+2025-11-02 20:37:28,609 - nse_news_collector - INFO - Found 3 news items for BSE
+2025-11-02 20:37:28,609 - nse_news_collector - INFO - Fetching news for keyword: Loan Default India
+2025-11-02 20:37:30,394 - nse_news_collector - INFO - Found 0 news items for Loan Default India
+2025-11-02 20:37:30,395 - nse_news_collector - INFO - Fetching news for keyword: NPA
+2025-11-02 20:37:31,945 - nse_news_collector - INFO - Found 2 news items for NPA
+2025-11-02 20:37:31,946 - nse_news_collector - INFO - Fetching news for keyword: Credit Card Growth India
+2025-11-02 20:37:33,676 - nse_news_collector - INFO - Found 0 news items for Credit Card Growth India
+2025-11-02 20:37:33,676 - nse_news_collector - INFO - Fetching news for keyword: Housing Loan
+2025-11-02 20:37:35,217 - nse_news_collector - INFO - Found 0 news items for Housing Loan
+2025-11-02 20:37:35,218 - nse_news_collector - INFO - Fetching news for keyword: Corporate Loan
+2025-11-02 20:37:37,372 - nse_news_collector - INFO - Found 0 news items for Corporate Loan
+2025-11-02 20:37:37,373 - nse_news_collector - INFO - Fetching news for keyword: Bank Merger
+2025-11-02 20:37:39,226 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:39,259 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:39,321 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:39,380 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:39,448 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:39] "GET /api/data HTTP/1.1" 200 -
+2025-11-02 20:37:39,491 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:39,534 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:39] "GET /api/stats HTTP/1.1" 200 -
+2025-11-02 20:37:39,566 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:39,631 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:39] "GET /api/option-chain/data HTTP/1.1" 200 -
+2025-11-02 20:37:40,320 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:40] "GET /api/option-chain/status HTTP/1.1" 200 -
+2025-11-02 20:37:40,373 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:40] "GET /api/status HTTP/1.1" 200 -
+2025-11-02 20:37:41,358 - nse_news_collector - INFO - Found 0 news items for Bank Merger
+2025-11-02 20:37:41,452 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:41,470 - nse_news_collector - INFO - Fetching news for keyword: Digital Banking
+2025-11-02 20:37:41,614 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:41,616 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:41] "GET /api/banknifty/status HTTP/1.1" 200 -
+2025-11-02 20:37:41,798 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:41,822 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:41,841 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:41] "GET /api/banknifty/data HTTP/1.1" 200 -
+2025-11-02 20:37:41,844 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:41] "GET /api/option-chain/stats HTTP/1.1" 200 -
+2025-11-02 20:37:41,875 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:41,928 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:41] "GET /api/news/status HTTP/1.1" 200 -
+2025-11-02 20:37:41,935 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:41,937 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:41] "GET /api/banknifty/stats HTTP/1.1" 200 -
+2025-11-02 20:37:41,953 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:41,955 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:37:41,959 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:41,963 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:41] "GET /api/news/data HTTP/1.1" 200 -
+2025-11-02 20:37:41,977 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:41,978 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:41] "GET /api/news/stats HTTP/1.1" 200 -
+2025-11-02 20:37:44,065 - nse_news_collector - INFO - Found 2 news items for Digital Banking
+2025-11-02 20:37:44,066 - nse_news_collector - INFO - Fetching news for keyword: Fintech India
+2025-11-02 20:37:46,043 - nse_news_collector - INFO - Found 1 news items for Fintech India
+2025-11-02 20:37:46,044 - nse_news_collector - INFO - Fetching news for keyword: UPI
+2025-11-02 20:37:47,998 - nse_news_collector - INFO - Found 3 news items for UPI
+2025-11-02 20:37:48,001 - nse_news_collector - INFO - Fetching news for keyword: OPEC
+2025-11-02 20:37:49,369 - nse_news_collector - INFO - Found 1 news items for OPEC
+2025-11-02 20:37:49,370 - nse_news_collector - INFO - Fetching news for keyword: Middle East Tension
+2025-11-02 20:37:50,703 - nse_news_collector - INFO - Found 0 news items for Middle East Tension
+2025-11-02 20:37:50,704 - nse_news_collector - INFO - Fetching news for keyword: Gold Price India
+2025-11-02 20:37:52,439 - nse_news_collector - INFO - Found 2 news items for Gold Price India
+2025-11-02 20:37:52,439 - nse_news_collector - INFO - Fetching news for keyword: Dollar Rupee
+2025-11-02 20:37:54,164 - nse_news_collector - INFO - Found 0 news items for Dollar Rupee
+2025-11-02 20:37:54,165 - nse_news_collector - INFO - Fetching news for keyword: Cyber Attack Bank
+2025-11-02 20:37:55,679 - nse_news_collector - INFO - Found 0 news items for Cyber Attack Bank
+2025-11-02 20:37:55,680 - nse_news_collector - INFO - Fetching news for keyword: AI in Banking
+2025-11-02 20:37:57,219 - nse_news_collector - INFO - Found 1 news items for AI in Banking
+2025-11-02 20:37:57,221 - nse_news_collector - INFO - Fetching news for keyword: Blockchain in Finance
+2025-11-02 20:37:58,611 - nse_news_collector - INFO - Found 1 news items for Blockchain in Finance
+2025-11-02 20:37:58,721 - nse_news_collector - INFO - Saved 0 news items, skipped 103 duplicates
+2025-11-02 20:37:58,721 - nse_news_collector - WARNING - No new news items saved (all were duplicates)
+2025-11-02 20:37:58,723 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:37:58,727 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:37:58] "POST /api/news/trigger HTTP/1.1" 200 -
+2025-11-02 20:38:04,116 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:04,455 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:04,485 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:04,546 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:04,562 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:04] "GET /api/stats HTTP/1.1" 200 -
+2025-11-02 20:38:04,640 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:04,677 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:04] "GET /api/status HTTP/1.1" 200 -
+2025-11-02 20:38:04,677 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:04,813 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:04,815 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:04] "GET /api/option-chain/status HTTP/1.1" 200 -
+2025-11-02 20:38:04,864 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:04] "GET /api/option-chain/stats HTTP/1.1" 200 -
+2025-11-02 20:38:04,878 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:04,892 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:04] "GET /api/data HTTP/1.1" 200 -
+2025-11-02 20:38:05,017 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:05] "GET /api/option-chain/data HTTP/1.1" 200 -
+2025-11-02 20:38:05,591 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:05,773 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:05] "GET /api/banknifty/status HTTP/1.1" 200 -
+2025-11-02 20:38:05,806 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:05,852 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:05] "GET /api/banknifty/data HTTP/1.1" 200 -
+2025-11-02 20:38:05,869 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:05,884 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:05,994 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:06,041 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:06,042 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:06,061 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:06] "GET /api/news/data HTTP/1.1" 200 -
+2025-11-02 20:38:06,088 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:06] "GET /api/banknifty/stats HTTP/1.1" 200 -
+2025-11-02 20:38:06,141 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:06] "GET /api/news/status HTTP/1.1" 200 -
+2025-11-02 20:38:06,155 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:06,156 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:06] "GET /api/news/stats HTTP/1.1" 200 -
+2025-11-02 20:38:09,106 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:09,197 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:09,309 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:09,368 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:09] "GET /api/stats HTTP/1.1" 200 -
+2025-11-02 20:38:09,477 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:09,521 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:09,521 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:09,540 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:09] "GET /api/data HTTP/1.1" 200 -
+2025-11-02 20:38:09,970 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:10,086 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:10] "GET /api/option-chain/data HTTP/1.1" 200 -
+2025-11-02 20:38:10,094 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:10] "GET /api/status HTTP/1.1" 200 -
+2025-11-02 20:38:10,141 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:10,301 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:10] "GET /api/option-chain/stats HTTP/1.1" 200 -
+2025-11-02 20:38:10,302 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:10] "GET /api/option-chain/status HTTP/1.1" 200 -
+2025-11-02 20:38:11,025 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:11] "GET /api/banknifty/status HTTP/1.1" 200 -
+2025-11-02 20:38:11,026 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:11,166 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:11,224 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:11] "GET /api/banknifty/data HTTP/1.1" 200 -
+2025-11-02 20:38:11,287 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:11,407 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:11,408 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:11,410 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:11] "GET /api/banknifty/stats HTTP/1.1" 200 -
+2025-11-02 20:38:11,410 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:11,410 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:11] "GET /api/news/status HTTP/1.1" 200 -
+2025-11-02 20:38:11,419 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:11,424 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:11] "GET /api/news/data HTTP/1.1" 200 -
+2025-11-02 20:38:11,433 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:11,434 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:11] "GET /api/news/stats HTTP/1.1" 200 -
+2025-11-02 20:38:13,766 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:13,921 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:13,942 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:13] "GET /api/status HTTP/1.1" 200 -
+2025-11-02 20:38:14,005 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:14,019 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:14,098 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:14] "GET /api/data HTTP/1.1" 200 -
+2025-11-02 20:38:14,140 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:14,141 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:14] "GET /api/option-chain/status HTTP/1.1" 200 -
+2025-11-02 20:38:14,162 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:14,162 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:14,236 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:14] "GET /api/stats HTTP/1.1" 200 -
+2025-11-02 20:38:14,236 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:14,269 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:14] "GET /api/option-chain/data HTTP/1.1" 200 -
+2025-11-02 20:38:14,286 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:14] "GET /api/option-chain/stats HTTP/1.1" 200 -
+2025-11-02 20:38:14,934 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:15,076 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:15,154 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:15,157 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:15] "GET /api/banknifty/data HTTP/1.1" 200 -
+2025-11-02 20:38:15,373 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:15,435 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:15] "GET /api/banknifty/stats HTTP/1.1" 200 -
+2025-11-02 20:38:15,436 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:15] "GET /api/banknifty/status HTTP/1.1" 200 -
+2025-11-02 20:38:15,659 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:15,712 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:15,767 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:15] "GET /api/news/status HTTP/1.1" 200 -
+2025-11-02 20:38:16,085 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:16,101 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:16,121 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:16] "GET /api/news/data HTTP/1.1" 200 -
+2025-11-02 20:38:16,178 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:16] "GET /api/news/stats HTTP/1.1" 200 -
+2025-11-02 20:38:16,458 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:16,758 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:16,780 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:16] "GET /api/status HTTP/1.1" 200 -
+2025-11-02 20:38:16,809 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:16] "GET /api/data HTTP/1.1" 200 -
+2025-11-02 20:38:17,023 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:17] "GET /api/option-chain/status HTTP/1.1" 200 -
+2025-11-02 20:38:17,025 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:17,026 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:17,074 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:17,139 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:17] "GET /api/option-chain/data HTTP/1.1" 200 -
+2025-11-02 20:38:17,167 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:17,210 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:17] "GET /api/stats HTTP/1.1" 200 -
+2025-11-02 20:38:17,245 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:17,431 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:17,675 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:17,692 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:17,771 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:17,823 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:17] "GET /api/option-chain/stats HTTP/1.1" 200 -
+2025-11-02 20:38:17,849 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:17] "GET /api/banknifty/data HTTP/1.1" 200 -
+2025-11-02 20:38:18,100 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:18,208 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:18] "GET /api/banknifty/stats HTTP/1.1" 200 -
+2025-11-02 20:38:18,238 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:18] "GET /api/banknifty/status HTTP/1.1" 200 -
+2025-11-02 20:38:18,383 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:18] "GET /api/news/status HTTP/1.1" 200 -
+2025-11-02 20:38:18,383 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:18,393 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:18,396 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:18] "GET /api/news/data HTTP/1.1" 200 -
+2025-11-02 20:38:18,398 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:18,415 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:18,417 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:18] "GET /api/news/stats HTTP/1.1" 200 -
+2025-11-02 20:38:44,251 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:44,332 - nse_fiidii_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:44,363 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:44,443 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:44] "GET /api/data HTTP/1.1" 200 -
+2025-11-02 20:38:44,473 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:44,500 - nse_fiidii_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:44,566 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:44] "GET /api/stats HTTP/1.1" 200 -
+2025-11-02 20:38:44,771 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:44] "GET /api/status HTTP/1.1" 200 -
+2025-11-02 20:38:44,847 - nse_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:44,939 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:44,969 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:44] "GET /api/option-chain/stats HTTP/1.1" 200 -
+2025-11-02 20:38:44,987 - nse_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:45,008 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:45] "GET /api/option-chain/status HTTP/1.1" 200 -
+2025-11-02 20:38:45,065 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:45] "GET /api/option-chain/data HTTP/1.1" 200 -
+2025-11-02 20:38:45,709 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:45,843 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:45] "GET /api/banknifty/status HTTP/1.1" 200 -
+2025-11-02 20:38:45,861 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:45,876 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:45] "GET /api/banknifty/data HTTP/1.1" 200 -
+2025-11-02 20:38:46,015 - nse_banknifty_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:46,089 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:46,107 - nse_news_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:38:46,108 - nse_banknifty_option_chain_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:46,111 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:46] "GET /api/news/status HTTP/1.1" 200 -
+2025-11-02 20:38:46,113 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:46] "GET /api/banknifty/stats HTTP/1.1" 200 -
+2025-11-02 20:38:46,113 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:46,117 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:46] "GET /api/news/data HTTP/1.1" 200 -
+2025-11-02 20:38:46,128 - nse_news_collector - INFO - MongoDB connection closed
+2025-11-02 20:38:46,128 - werkzeug - INFO - 127.0.0.1 - - [02/Nov/2025 20:38:46] "GET /api/news/stats HTTP/1.1" 200 -
