@@ -1,0 +1,184 @@
+2025-11-02 20:26:11,525 - __main__ - INFO - Starting NSE News Collector Scheduler
+2025-11-02 20:26:11,526 - __main__ - INFO - Schedule: Monday to Friday from 09:00 to 15:30, every 15 minutes
+2025-11-02 20:26:11,526 - __main__ - INFO - Scheduler configured. Waiting for scheduled times...
+2025-11-02 20:27:05,672 - __main__ - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:27:05,672 - __main__ - INFO - Starting news collection...
+2025-11-02 20:27:05,674 - __main__ - INFO - Fetching news for keyword: HDFC Bank
+2025-11-02 20:27:07,633 - __main__ - INFO - Found 1 news items for HDFC Bank
+2025-11-02 20:27:07,644 - __main__ - INFO - Fetching news for keyword: ICICI Bank
+2025-11-02 20:27:09,279 - __main__ - INFO - Found 4 news items for ICICI Bank
+2025-11-02 20:27:09,280 - __main__ - INFO - Fetching news for keyword: Axis Bank
+2025-11-02 20:27:11,503 - __main__ - INFO - Found 0 news items for Axis Bank
+2025-11-02 20:27:11,504 - __main__ - INFO - Fetching news for keyword: Kotak Mahindra Bank
+2025-11-02 20:27:13,698 - __main__ - INFO - Found 0 news items for Kotak Mahindra Bank
+2025-11-02 20:27:13,698 - __main__ - INFO - Fetching news for keyword: SBI
+2025-11-02 20:27:15,490 - __main__ - INFO - Found 14 news items for SBI
+2025-11-02 20:27:15,491 - __main__ - INFO - Fetching news for keyword: IndusInd Bank
+2025-11-02 20:27:17,371 - __main__ - INFO - Found 3 news items for IndusInd Bank
+2025-11-02 20:27:17,372 - __main__ - INFO - Fetching news for keyword: Federal Bank
+2025-11-02 20:27:19,231 - __main__ - INFO - Found 1 news items for Federal Bank
+2025-11-02 20:27:19,232 - __main__ - INFO - Fetching news for keyword: Bank of Baroda
+2025-11-02 20:27:21,525 - __main__ - INFO - Found 3 news items for Bank of Baroda
+2025-11-02 20:27:21,525 - __main__ - INFO - Fetching news for keyword: PNB
+2025-11-02 20:27:23,603 - __main__ - INFO - Found 0 news items for PNB
+2025-11-02 20:27:23,605 - __main__ - INFO - Fetching news for keyword: IDFC First Bank
+2025-11-02 20:27:25,335 - __main__ - INFO - Found 0 news items for IDFC First Bank
+2025-11-02 20:27:25,337 - __main__ - INFO - Fetching news for keyword: AU Small Finance Bank
+2025-11-02 20:27:27,293 - __main__ - INFO - Found 0 news items for AU Small Finance Bank
+2025-11-02 20:27:27,294 - __main__ - INFO - Fetching news for keyword: IDBI Bank
+2025-11-02 20:27:29,868 - __main__ - INFO - Found 0 news items for IDBI Bank
+2025-11-02 20:27:29,869 - __main__ - INFO - Fetching news for keyword: Nifty 50
+2025-11-02 20:27:32,187 - __main__ - INFO - Found 4 news items for Nifty 50
+2025-11-02 20:27:32,188 - __main__ - INFO - Fetching news for keyword: Bank Nifty
+2025-11-02 20:27:35,831 - __main__ - INFO - Found 3 news items for Bank Nifty
+2025-11-02 20:27:35,847 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,850 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,852 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,853 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,856 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,858 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,861 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,862 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,864 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,866 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,868 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,869 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,870 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,871 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,872 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,874 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,875 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,876 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,878 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,879 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,881 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,882 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,883 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,884 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,886 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,887 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,888 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,890 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,891 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,893 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,894 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,895 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,897 - __main__ - ERROR - Error saving news item: Updating the path 'insertedAt' would create a conflict at 'insertedAt', full error: {'index': 0, 'code': 40, 'errmsg': "Updating the path 'insertedAt' would create a conflict at 'insertedAt'"}
+2025-11-02 20:27:35,898 - __main__ - INFO - Saved 0 news items, skipped 0 duplicates
+2025-11-02 20:27:35,898 - __main__ - WARNING - No new news items saved (all were duplicates)
+2025-11-02 20:27:35,899 - __main__ - INFO - MongoDB connection closed
+2025-11-02 20:32:01,756 - __main__ - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-02 20:32:01,756 - __main__ - INFO - Starting news collection...
+2025-11-02 20:32:01,756 - __main__ - INFO - Fetching news for keyword: HDFC Bank
+2025-11-02 20:32:03,676 - __main__ - INFO - Found 1 news items for HDFC Bank
+2025-11-02 20:32:03,677 - __main__ - INFO - Fetching news for keyword: ICICI Bank
+2025-11-02 20:32:06,943 - __main__ - INFO - Found 4 news items for ICICI Bank
+2025-11-02 20:32:06,944 - __main__ - INFO - Fetching news for keyword: Axis Bank
+2025-11-02 20:32:08,358 - __main__ - INFO - Found 0 news items for Axis Bank
+2025-11-02 20:32:08,359 - __main__ - INFO - Fetching news for keyword: Kotak Mahindra Bank
+2025-11-02 20:32:10,168 - __main__ - INFO - Found 0 news items for Kotak Mahindra Bank
+2025-11-02 20:32:10,169 - __main__ - INFO - Fetching news for keyword: SBI
+2025-11-02 20:32:13,100 - __main__ - INFO - Found 14 news items for SBI
+2025-11-02 20:32:13,101 - __main__ - INFO - Fetching news for keyword: IndusInd Bank
+2025-11-02 20:32:16,491 - __main__ - INFO - Found 3 news items for IndusInd Bank
+2025-11-02 20:32:16,492 - __main__ - INFO - Fetching news for keyword: Federal Bank
+2025-11-02 20:32:20,281 - __main__ - INFO - Found 1 news items for Federal Bank
+2025-11-02 20:32:20,282 - __main__ - INFO - Fetching news for keyword: Bank of Baroda
+2025-11-02 20:32:21,959 - __main__ - INFO - Found 3 news items for Bank of Baroda
+2025-11-02 20:32:21,960 - __main__ - INFO - Fetching news for keyword: PNB
+2025-11-02 20:32:23,407 - __main__ - INFO - Found 0 news items for PNB
+2025-11-02 20:32:23,408 - __main__ - INFO - Fetching news for keyword: IDFC First Bank
+2025-11-02 20:32:24,986 - __main__ - INFO - Found 0 news items for IDFC First Bank
+2025-11-02 20:32:24,986 - __main__ - INFO - Fetching news for keyword: AU Small Finance Bank
+2025-11-02 20:32:26,629 - __main__ - INFO - Found 0 news items for AU Small Finance Bank
+2025-11-02 20:32:26,630 - __main__ - INFO - Fetching news for keyword: IDBI Bank
+2025-11-02 20:32:28,203 - __main__ - INFO - Found 0 news items for IDBI Bank
+2025-11-02 20:32:28,204 - __main__ - INFO - Fetching news for keyword: Nifty 50
+2025-11-02 20:32:30,094 - __main__ - INFO - Found 4 news items for Nifty 50
+2025-11-02 20:32:30,095 - __main__ - INFO - Fetching news for keyword: Bank Nifty
+2025-11-02 20:32:32,497 - __main__ - INFO - Found 3 news items for Bank Nifty
+2025-11-02 20:32:32,498 - __main__ - INFO - Fetching news for keyword: RBI
+2025-11-02 20:32:34,228 - __main__ - INFO - Found 8 news items for RBI
+2025-11-02 20:32:34,229 - __main__ - INFO - Fetching news for keyword: Monetary Policy
+2025-11-02 20:32:35,539 - __main__ - INFO - Found 5 news items for Monetary Policy
+2025-11-02 20:32:35,539 - __main__ - INFO - Fetching news for keyword: Repo Rate
+2025-11-02 20:32:37,675 - __main__ - INFO - Found 0 news items for Repo Rate
+2025-11-02 20:32:37,676 - __main__ - INFO - Fetching news for keyword: Inflation India
+2025-11-02 20:32:39,151 - __main__ - INFO - Found 0 news items for Inflation India
+2025-11-02 20:32:39,152 - __main__ - INFO - Fetching news for keyword: GDP India
+2025-11-02 20:32:40,769 - __main__ - INFO - Found 1 news items for GDP India
+2025-11-02 20:32:40,770 - __main__ - INFO - Fetching news for keyword: SEBI
+2025-11-02 20:32:42,251 - __main__ - INFO - Found 4 news items for SEBI
+2025-11-02 20:32:42,252 - __main__ - INFO - Fetching news for keyword: Union Budget India
+2025-11-02 20:32:43,954 - __main__ - INFO - Found 0 news items for Union Budget India
+2025-11-02 20:32:43,955 - __main__ - INFO - Fetching news for keyword: NBFC
+2025-11-02 20:32:45,612 - __main__ - INFO - Found 1 news items for NBFC
+2025-11-02 20:32:45,612 - __main__ - INFO - Fetching news for keyword: Fiscal Deficit
+2025-11-02 20:32:47,249 - __main__ - INFO - Found 2 news items for Fiscal Deficit
+2025-11-02 20:32:47,250 - __main__ - INFO - Fetching news for keyword: Credit Growth India
+2025-11-02 20:32:48,590 - __main__ - INFO - Found 0 news items for Credit Growth India
+2025-11-02 20:32:48,591 - __main__ - INFO - Fetching news for keyword: US Federal Reserve
+2025-11-02 20:32:50,147 - __main__ - INFO - Found 0 news items for US Federal Reserve
+2025-11-02 20:32:50,149 - __main__ - INFO - Fetching news for keyword: US Inflation
+2025-11-02 20:32:51,874 - __main__ - INFO - Found 1 news items for US Inflation
+2025-11-02 20:32:51,875 - __main__ - INFO - Fetching news for keyword: Crude Oil Prices
+2025-11-02 20:32:53,960 - __main__ - INFO - Found 2 news items for Crude Oil Prices
+2025-11-02 20:32:53,961 - __main__ - INFO - Fetching news for keyword: USD INR
+2025-11-02 20:32:55,599 - __main__ - INFO - Found 0 news items for USD INR
+2025-11-02 20:32:55,600 - __main__ - INFO - Fetching news for keyword: Global Recession
+2025-11-02 20:32:57,011 - __main__ - INFO - Found 6 news items for Global Recession
+2025-11-02 20:32:57,012 - __main__ - INFO - Fetching news for keyword: China Economy
+2025-11-02 20:32:58,988 - __main__ - INFO - Found 4 news items for China Economy
+2025-11-02 20:32:58,988 - __main__ - INFO - Fetching news for keyword: Dollar Index
+2025-11-02 20:33:01,254 - __main__ - INFO - Found 0 news items for Dollar Index
+2025-11-02 20:33:01,255 - __main__ - INFO - Fetching news for keyword: Bond Yield
+2025-11-02 20:33:02,920 - __main__ - INFO - Found 0 news items for Bond Yield
+2025-11-02 20:33:02,921 - __main__ - INFO - Fetching news for keyword: FII Activity India
+2025-11-02 20:33:04,144 - __main__ - INFO - Found 2 news items for FII Activity India
+2025-11-02 20:33:04,145 - __main__ - INFO - Fetching news for keyword: DII Activity India
+2025-11-02 20:33:05,135 - __main__ - INFO - Found 0 news items for DII Activity India
+2025-11-02 20:33:05,135 - __main__ - INFO - Fetching news for keyword: Foreign Investment India
+2025-11-02 20:33:06,612 - __main__ - INFO - Found 8 news items for Foreign Investment India
+2025-11-02 20:33:06,613 - __main__ - INFO - Fetching news for keyword: Sensex
+2025-11-02 20:33:08,335 - __main__ - INFO - Found 1 news items for Sensex
+2025-11-02 20:33:08,336 - __main__ - INFO - Fetching news for keyword: NSE
+2025-11-02 20:33:09,635 - __main__ - INFO - Found 9 news items for NSE
+2025-11-02 20:33:09,636 - __main__ - INFO - Fetching news for keyword: BSE
+2025-11-02 20:33:10,936 - __main__ - INFO - Found 3 news items for BSE
+2025-11-02 20:33:10,937 - __main__ - INFO - Fetching news for keyword: Loan Default India
+2025-11-02 20:33:12,760 - __main__ - INFO - Found 0 news items for Loan Default India
+2025-11-02 20:33:12,762 - __main__ - INFO - Fetching news for keyword: NPA
+2025-11-02 20:33:14,539 - __main__ - INFO - Found 2 news items for NPA
+2025-11-02 20:33:14,540 - __main__ - INFO - Fetching news for keyword: Credit Card Growth India
+2025-11-02 20:33:16,331 - __main__ - INFO - Found 0 news items for Credit Card Growth India
+2025-11-02 20:33:16,332 - __main__ - INFO - Fetching news for keyword: Housing Loan
+2025-11-02 20:33:17,892 - __main__ - INFO - Found 0 news items for Housing Loan
+2025-11-02 20:33:17,892 - __main__ - INFO - Fetching news for keyword: Corporate Loan
+2025-11-02 20:33:19,407 - __main__ - INFO - Found 0 news items for Corporate Loan
+2025-11-02 20:33:19,408 - __main__ - INFO - Fetching news for keyword: Bank Merger
+2025-11-02 20:33:21,266 - __main__ - INFO - Found 0 news items for Bank Merger
+2025-11-02 20:33:21,267 - __main__ - INFO - Fetching news for keyword: Digital Banking
+2025-11-02 20:33:22,866 - __main__ - INFO - Found 2 news items for Digital Banking
+2025-11-02 20:33:22,867 - __main__ - INFO - Fetching news for keyword: Fintech India
+2025-11-02 20:33:24,799 - __main__ - INFO - Found 1 news items for Fintech India
+2025-11-02 20:33:24,800 - __main__ - INFO - Fetching news for keyword: UPI
+2025-11-02 20:33:26,736 - __main__ - INFO - Found 3 news items for UPI
+2025-11-02 20:33:26,737 - __main__ - INFO - Fetching news for keyword: Russia Ukraine
+2025-11-02 20:33:29,063 - __main__ - INFO - Found 8 news items for Russia Ukraine
+2025-11-02 20:33:29,066 - __main__ - INFO - Fetching news for keyword: OPEC
+2025-11-02 20:33:30,999 - __main__ - INFO - Found 1 news items for OPEC
+2025-11-02 20:33:30,999 - __main__ - INFO - Fetching news for keyword: Middle East Tension
+2025-11-02 20:33:34,457 - __main__ - INFO - Found 0 news items for Middle East Tension
+2025-11-02 20:33:34,457 - __main__ - INFO - Fetching news for keyword: Gold Price India
+2025-11-02 20:33:36,577 - __main__ - INFO - Found 2 news items for Gold Price India
+2025-11-02 20:33:36,578 - __main__ - INFO - Fetching news for keyword: Dollar Rupee
+2025-11-02 20:33:38,883 - __main__ - INFO - Found 0 news items for Dollar Rupee
+2025-11-02 20:33:38,884 - __main__ - INFO - Fetching news for keyword: Cyber Attack Bank
+2025-11-02 20:33:40,459 - __main__ - INFO - Found 0 news items for Cyber Attack Bank
+2025-11-02 20:33:40,460 - __main__ - INFO - Fetching news for keyword: AI in Banking
+2025-11-02 20:33:41,986 - __main__ - INFO - Found 1 news items for AI in Banking
+2025-11-02 20:33:41,987 - __main__ - INFO - Fetching news for keyword: Blockchain in Finance
+2025-11-02 20:33:43,986 - __main__ - INFO - Found 1 news items for Blockchain in Finance
+2025-11-02 20:33:44,139 - __main__ - INFO - Saved 111 news items, skipped 0 duplicates
+2025-11-02 20:33:44,140 - __main__ - INFO - News collection completed successfully. Saved 111 items.
+2025-11-02 20:33:44,142 - __main__ - INFO - MongoDB connection closed
