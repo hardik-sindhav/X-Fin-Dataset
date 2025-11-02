@@ -8,7 +8,20 @@ from flask_cors import CORS
 from nse_fiidii_collector import NSEDataCollector
 from nse_option_chain_collector import NSEOptionChainCollector
 from nse_banknifty_option_chain_collector import NSEBankNiftyOptionChainCollector
+from nse_hdfcbank_option_chain_collector import NSEHDFCBankOptionChainCollector
+from nse_icicibank_option_chain_collector import NSEICICIBankOptionChainCollector
+from nse_sbin_option_chain_collector import NSESBINOptionChainCollector
+from nse_kotakbank_option_chain_collector import NSEKotakBankOptionChainCollector
+from nse_axisbank_option_chain_collector import NSEAxisBankOptionChainCollector
+from nse_bankbaroda_option_chain_collector import NSEBankBarodaOptionChainCollector
+from nse_pnb_option_chain_collector import NSEPNBOptionChainCollector
+from nse_canbk_option_chain_collector import NSECANBKOptionChainCollector
+from nse_aubank_option_chain_collector import NSEAUBANKOptionChainCollector
+from nse_indusindbk_option_chain_collector import NSEIndusIndBkOptionChainCollector
+from nse_idfcfirstb_option_chain_collector import NSEIDFCFIRSTBOptionChainCollector
+from nse_federalbnk_option_chain_collector import NSEFEDERALBNKOptionChainCollector
 from nse_news_collector import NSENewsCollector
+from nse_twitter_collector import NSETwitterCollector
 import schedule
 import json
 import os
@@ -24,7 +37,20 @@ CORS(app)  # Enable CORS for React frontend
 STATUS_FILE = 'scheduler_status.json'
 OPTION_CHAIN_STATUS_FILE = 'option_chain_scheduler_status.json'
 BANKNIFTY_STATUS_FILE = 'banknifty_option_chain_scheduler_status.json'
+HDFCBANK_STATUS_FILE = 'hdfcbank_option_chain_scheduler_status.json'
+ICICIBANK_STATUS_FILE = 'icicibank_option_chain_scheduler_status.json'
+SBIN_STATUS_FILE = 'sbin_option_chain_scheduler_status.json'
+KOTAKBANK_STATUS_FILE = 'kotakbank_option_chain_scheduler_status.json'
+AXISBANK_STATUS_FILE = 'axisbank_option_chain_scheduler_status.json'
+BANKBARODA_STATUS_FILE = 'bankbaroda_option_chain_scheduler_status.json'
+PNB_STATUS_FILE = 'pnb_option_chain_scheduler_status.json'
+CANBK_STATUS_FILE = 'canbk_option_chain_scheduler_status.json'
+AUBANK_STATUS_FILE = 'aubank_option_chain_scheduler_status.json'
+INDUSINDBK_STATUS_FILE = 'indusindbk_option_chain_scheduler_status.json'
+IDFCFIRSTB_STATUS_FILE = 'idfcfirstb_option_chain_scheduler_status.json'
+FEDERALBNK_STATUS_FILE = 'federalbnk_option_chain_scheduler_status.json'
 NEWS_COLLECTOR_STATUS_FILE = 'news_collector_scheduler_status.json'
+TWITTER_COLLECTOR_STATUS_FILE = 'twitter_collector_scheduler_status.json'
 
 
 def get_next_run_time():
@@ -599,6 +625,2610 @@ def api_banknifty_trigger():
         }), 500
 
 
+# HDFC Bank Option Chain Endpoints
+
+def get_hdfcbank_option_chain_next_run_time():
+    """Calculate next scheduled run time for HDFC Bank option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_hdfcbank_option_chain_status():
+    """Get HDFC Bank option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('hdfcbank_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_hdfcbank_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(HDFCBANK_STATUS_FILE):
+        try:
+            with open(HDFCBANK_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/hdfcbank/status')
+def api_hdfcbank_status():
+    """API endpoint to get HDFC Bank option chain scheduler status"""
+    status = get_hdfcbank_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/hdfcbank/data')
+def api_hdfcbank_data():
+    """API endpoint to get collected HDFC Bank option chain data"""
+    try:
+        collector = NSEHDFCBankOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/hdfcbank/stats')
+def api_hdfcbank_stats():
+    """API endpoint to get HDFC Bank option chain statistics"""
+    try:
+        collector = NSEHDFCBankOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/hdfcbank/trigger', methods=['POST'])
+def api_hdfcbank_trigger():
+    """API endpoint to manually trigger HDFC Bank option chain data collection"""
+    try:
+        collector = NSEHDFCBankOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(HDFCBANK_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "HDFC Bank option chain data collection completed" if success else "HDFC Bank option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# ICICI Bank Option Chain Endpoints
+
+def get_icicibank_option_chain_next_run_time():
+    """Calculate next scheduled run time for ICICI Bank option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_icicibank_option_chain_status():
+    """Get ICICI Bank option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('icicibank_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_icicibank_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(ICICIBANK_STATUS_FILE):
+        try:
+            with open(ICICIBANK_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/icicibank/status')
+def api_icicibank_status():
+    """API endpoint to get ICICI Bank option chain scheduler status"""
+    status = get_icicibank_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/icicibank/data')
+def api_icicibank_data():
+    """API endpoint to get collected ICICI Bank option chain data"""
+    try:
+        collector = NSEICICIBankOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/icicibank/stats')
+def api_icicibank_stats():
+    """API endpoint to get ICICI Bank option chain statistics"""
+    try:
+        collector = NSEICICIBankOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/icicibank/trigger', methods=['POST'])
+def api_icicibank_trigger():
+    """API endpoint to manually trigger ICICI Bank option chain data collection"""
+    try:
+        collector = NSEICICIBankOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(ICICIBANK_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "ICICI Bank option chain data collection completed" if success else "ICICI Bank option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# SBIN Option Chain Endpoints
+
+def get_sbin_option_chain_next_run_time():
+    """Calculate next scheduled run time for SBIN option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_sbin_option_chain_status():
+    """Get SBIN option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('sbin_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_sbin_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(SBIN_STATUS_FILE):
+        try:
+            with open(SBIN_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/sbin/status')
+def api_sbin_status():
+    """API endpoint to get SBIN option chain scheduler status"""
+    status = get_sbin_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/sbin/data')
+def api_sbin_data():
+    """API endpoint to get collected SBIN option chain data"""
+    try:
+        collector = NSESBINOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/sbin/stats')
+def api_sbin_stats():
+    """API endpoint to get SBIN option chain statistics"""
+    try:
+        collector = NSESBINOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/sbin/trigger', methods=['POST'])
+def api_sbin_trigger():
+    """API endpoint to manually trigger SBIN option chain data collection"""
+    try:
+        collector = NSESBINOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(SBIN_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "SBIN option chain data collection completed" if success else "SBIN option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# Kotak Bank Option Chain Endpoints
+
+def get_kotakbank_option_chain_next_run_time():
+    """Calculate next scheduled run time for Kotak Bank option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_kotakbank_option_chain_status():
+    """Get Kotak Bank option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('kotakbank_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_kotakbank_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(KOTAKBANK_STATUS_FILE):
+        try:
+            with open(KOTAKBANK_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/kotakbank/status')
+def api_kotakbank_status():
+    """API endpoint to get Kotak Bank option chain scheduler status"""
+    status = get_kotakbank_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/kotakbank/data')
+def api_kotakbank_data():
+    """API endpoint to get collected Kotak Bank option chain data"""
+    try:
+        collector = NSEKotakBankOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/kotakbank/stats')
+def api_kotakbank_stats():
+    """API endpoint to get Kotak Bank option chain statistics"""
+    try:
+        collector = NSEKotakBankOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/kotakbank/trigger', methods=['POST'])
+def api_kotakbank_trigger():
+    """API endpoint to manually trigger Kotak Bank option chain data collection"""
+    try:
+        collector = NSEKotakBankOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(KOTAKBANK_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "Kotak Bank option chain data collection completed" if success else "Kotak Bank option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# Axis Bank Option Chain Endpoints
+
+def get_axisbank_option_chain_next_run_time():
+    """Calculate next scheduled run time for Axis Bank option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_axisbank_option_chain_status():
+    """Get Axis Bank option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('axisbank_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_axisbank_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(AXISBANK_STATUS_FILE):
+        try:
+            with open(AXISBANK_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/axisbank/status')
+def api_axisbank_status():
+    """API endpoint to get Axis Bank option chain scheduler status"""
+    status = get_axisbank_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/axisbank/data')
+def api_axisbank_data():
+    """API endpoint to get collected Axis Bank option chain data"""
+    try:
+        collector = NSEAxisBankOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/axisbank/stats')
+def api_axisbank_stats():
+    """API endpoint to get Axis Bank option chain statistics"""
+    try:
+        collector = NSEAxisBankOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/axisbank/trigger', methods=['POST'])
+def api_axisbank_trigger():
+    """API endpoint to manually trigger Axis Bank option chain data collection"""
+    try:
+        collector = NSEAxisBankOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(AXISBANK_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "Axis Bank option chain data collection completed" if success else "Axis Bank option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# Bank of Baroda Option Chain Endpoints
+
+def get_bankbaroda_option_chain_next_run_time():
+    """Calculate next scheduled run time for Bank of Baroda option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_bankbaroda_option_chain_status():
+    """Get Bank of Baroda option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('bankbaroda_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_bankbaroda_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(BANKBARODA_STATUS_FILE):
+        try:
+            with open(BANKBARODA_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/bankbaroda/status')
+def api_bankbaroda_status():
+    """API endpoint to get Bank of Baroda option chain scheduler status"""
+    status = get_bankbaroda_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/bankbaroda/data')
+def api_bankbaroda_data():
+    """API endpoint to get collected Bank of Baroda option chain data"""
+    try:
+        collector = NSEBankBarodaOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/bankbaroda/stats')
+def api_bankbaroda_stats():
+    """API endpoint to get Bank of Baroda option chain statistics"""
+    try:
+        collector = NSEBankBarodaOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/bankbaroda/trigger', methods=['POST'])
+def api_bankbaroda_trigger():
+    """API endpoint to manually trigger Bank of Baroda option chain data collection"""
+    try:
+        collector = NSEBankBarodaOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(BANKBARODA_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "Bank of Baroda option chain data collection completed" if success else "Bank of Baroda option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# PNB Option Chain Endpoints
+
+def get_pnb_option_chain_next_run_time():
+    """Calculate next scheduled run time for PNB option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_pnb_option_chain_status():
+    """Get PNB option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('pnb_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_pnb_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(PNB_STATUS_FILE):
+        try:
+            with open(PNB_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/pnb/status')
+def api_pnb_status():
+    """API endpoint to get PNB option chain scheduler status"""
+    status = get_pnb_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/pnb/data')
+def api_pnb_data():
+    """API endpoint to get collected PNB option chain data"""
+    try:
+        collector = NSEPNBOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/pnb/stats')
+def api_pnb_stats():
+    """API endpoint to get PNB option chain statistics"""
+    try:
+        collector = NSEPNBOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/pnb/trigger', methods=['POST'])
+def api_pnb_trigger():
+    """API endpoint to manually trigger PNB option chain data collection"""
+    try:
+        collector = NSEPNBOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(PNB_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "PNB option chain data collection completed" if success else "PNB option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# CANBK Option Chain Endpoints
+
+def get_canbk_option_chain_next_run_time():
+    """Calculate next scheduled run time for CANBK option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_canbk_option_chain_status():
+    """Get CANBK option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('canbk_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_canbk_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(CANBK_STATUS_FILE):
+        try:
+            with open(CANBK_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/canbk/status')
+def api_canbk_status():
+    """API endpoint to get CANBK option chain scheduler status"""
+    status = get_canbk_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/canbk/data')
+def api_canbk_data():
+    """API endpoint to get collected CANBK option chain data"""
+    try:
+        collector = NSECANBKOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/canbk/stats')
+def api_canbk_stats():
+    """API endpoint to get CANBK option chain statistics"""
+    try:
+        collector = NSECANBKOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/canbk/trigger', methods=['POST'])
+def api_canbk_trigger():
+    """API endpoint to manually trigger CANBK option chain data collection"""
+    try:
+        collector = NSECANBKOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(CANBK_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "CANBK option chain data collection completed" if success else "CANBK option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# AUBANK Option Chain Endpoints
+
+def get_aubank_option_chain_next_run_time():
+    """Calculate next scheduled run time for AUBANK option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_aubank_option_chain_status():
+    """Get AUBANK option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('aubank_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_aubank_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(AUBANK_STATUS_FILE):
+        try:
+            with open(AUBANK_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/aubank/status')
+def api_aubank_status():
+    """API endpoint to get AUBANK option chain scheduler status"""
+    status = get_aubank_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/aubank/data')
+def api_aubank_data():
+    """API endpoint to get collected AUBANK option chain data"""
+    try:
+        collector = NSEAUBANKOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/aubank/stats')
+def api_aubank_stats():
+    """API endpoint to get AUBANK option chain statistics"""
+    try:
+        collector = NSEAUBANKOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/aubank/trigger', methods=['POST'])
+def api_aubank_trigger():
+    """API endpoint to manually trigger AUBANK option chain data collection"""
+    try:
+        collector = NSEAUBANKOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(AUBANK_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "AUBANK option chain data collection completed" if success else "AUBANK option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# INDUSINDBK Option Chain Endpoints
+
+def get_indusindbk_option_chain_next_run_time():
+    """Calculate next scheduled run time for INDUSINDBK option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_indusindbk_option_chain_status():
+    """Get INDUSINDBK option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('indusindbk_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_indusindbk_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(INDUSINDBK_STATUS_FILE):
+        try:
+            with open(INDUSINDBK_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/indusindbk/status')
+def api_indusindbk_status():
+    """API endpoint to get INDUSINDBK option chain scheduler status"""
+    status = get_indusindbk_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/indusindbk/data')
+def api_indusindbk_data():
+    """API endpoint to get collected INDUSINDBK option chain data"""
+    try:
+        collector = NSEIndusIndBkOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/indusindbk/stats')
+def api_indusindbk_stats():
+    """API endpoint to get INDUSINDBK option chain statistics"""
+    try:
+        collector = NSEIndusIndBkOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/indusindbk/trigger', methods=['POST'])
+def api_indusindbk_trigger():
+    """API endpoint to manually trigger INDUSINDBK option chain data collection"""
+    try:
+        collector = NSEIndusIndBkOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(INDUSINDBK_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "INDUSINDBK option chain data collection completed" if success else "INDUSINDBK option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# IDFCFIRSTB Option Chain Endpoints
+
+def get_idfcfirstb_option_chain_next_run_time():
+    """Calculate next scheduled run time for IDFCFIRSTB option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_idfcfirstb_option_chain_status():
+    """Get IDFCFIRSTB option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('idfcfirstb_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_idfcfirstb_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(IDFCFIRSTB_STATUS_FILE):
+        try:
+            with open(IDFCFIRSTB_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/idfcfirstb/status')
+def api_idfcfirstb_status():
+    """API endpoint to get IDFCFIRSTB option chain scheduler status"""
+    status = get_idfcfirstb_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/idfcfirstb/data')
+def api_idfcfirstb_data():
+    """API endpoint to get collected IDFCFIRSTB option chain data"""
+    try:
+        collector = NSEIDFCFIRSTBOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/idfcfirstb/stats')
+def api_idfcfirstb_stats():
+    """API endpoint to get IDFCFIRSTB option chain statistics"""
+    try:
+        collector = NSEIDFCFIRSTBOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/idfcfirstb/trigger', methods=['POST'])
+def api_idfcfirstb_trigger():
+    """API endpoint to manually trigger IDFCFIRSTB option chain data collection"""
+    try:
+        collector = NSEIDFCFIRSTBOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(IDFCFIRSTB_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "IDFCFIRSTB option chain data collection completed" if success else "IDFCFIRSTB option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# FEDERALBNK Option Chain Endpoints
+
+def get_federalbnk_option_chain_next_run_time():
+    """Calculate next scheduled run time for FEDERALBNK option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:15
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:15
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:15 to 03:30)
+    # Calculate next 3-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 3) + 1) * 3
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:15
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_federalbnk_option_chain_status():
+    """Get FEDERALBNK option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('federalbnk_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_federalbnk_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(FEDERALBNK_STATUS_FILE):
+        try:
+            with open(FEDERALBNK_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/federalbnk/status')
+def api_federalbnk_status():
+    """API endpoint to get FEDERALBNK option chain scheduler status"""
+    status = get_federalbnk_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/federalbnk/data')
+def api_federalbnk_data():
+    """API endpoint to get collected FEDERALBNK option chain data"""
+    try:
+        collector = NSEFEDERALBNKOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
+            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
+            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/federalbnk/stats')
+def api_federalbnk_stats():
+    """API endpoint to get FEDERALBNK option chain statistics"""
+    try:
+        collector = NSEFEDERALBNKOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_timestamp = None
+        latest_underlying = None
+        if latest_record:
+            records_data = latest_record.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/federalbnk/trigger', methods=['POST'])
+def api_federalbnk_trigger():
+    """API endpoint to manually trigger FEDERALBNK option chain data collection"""
+    try:
+        collector = NSEFEDERALBNKOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(FEDERALBNK_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "FEDERALBNK option chain data collection completed" if success else "FEDERALBNK option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # News Collector Endpoints
 
 def get_news_collector_next_run_time():
@@ -819,6 +3449,233 @@ def api_news_trigger():
         return jsonify({
             "success": success,
             "message": "News collection completed" if success else "News collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+def get_twitter_collector_next_run_time():
+    """Calculate next scheduled run time for Twitter collector (09:00 AM to 03:30 PM, every 15 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 0)   # 09:00 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:00
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 09:00
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 09:00
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (09:00 to 03:30)
+    # Calculate next 15-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 15) + 1) * 15
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:00
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 09:00
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_twitter_collector_status():
+    """Get Twitter collector scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('twitter_collector_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_twitter_collector_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(TWITTER_COLLECTOR_STATUS_FILE):
+        try:
+            with open(TWITTER_COLLECTOR_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/twitter/status')
+def api_twitter_status():
+    """API endpoint to get Twitter collector scheduler status"""
+    status = get_twitter_collector_status()
+    return jsonify(status)
+
+
+@app.route('/api/twitter/data')
+def api_twitter_data():
+    """API endpoint to get collected Twitter data"""
+    try:
+        collector = NSETwitterCollector()
+        
+        # Get all records sorted by tweet_date (newest first)
+        records = list(collector.collection.find().sort("tweet_date", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "date": record.get("date"),
+                "tweet_id": record.get("tweet_id"),
+                "username": record.get("username"),
+                "followers_count": record.get("followers_count", 0),
+                "content": record.get("content"),
+                "retweet_count": record.get("retweet_count", 0),
+                "like_count": record.get("like_count", 0),
+                "sentiment": record.get("sentiment"),
+                "tweet_date": record.get("tweet_date").isoformat() if record.get("tweet_date") else None,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/twitter/stats')
+def api_twitter_stats():
+    """API endpoint to get Twitter statistics"""
+    try:
+        collector = NSETwitterCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get today's date
+        import pytz
+        ist = pytz.timezone("Asia/Kolkata")
+        today = datetime.now(ist).date().isoformat()
+        
+        # Count by sentiment
+        positive_count = collector.collection.count_documents({"sentiment": "Positive", "date": today})
+        negative_count = collector.collection.count_documents({"sentiment": "Negative", "date": today})
+        neutral_count = collector.collection.count_documents({"sentiment": "Neutral", "date": today})
+        
+        # Count by top users
+        user_pipeline = [
+            {"$match": {"date": today}},
+            {"$group": {"_id": "$username", "count": {"$sum": 1}, "avg_followers": {"$avg": "$followers_count"}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 5}
+        ]
+        top_users = list(collector.collection.aggregate(user_pipeline))
+        
+        stats = {
+            "total_records": total_count,
+            "today_count": collector.collection.count_documents({"date": today}),
+            "today_positive": positive_count,
+            "today_negative": negative_count,
+            "today_neutral": neutral_count,
+            "top_users": [{"username": item["_id"], "count": item["count"], "avg_followers": int(item.get("avg_followers", 0))} for item in top_users]
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/twitter/trigger', methods=['POST'])
+def api_twitter_trigger():
+    """API endpoint to manually trigger Twitter collection"""
+    try:
+        collector = NSETwitterCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(TWITTER_COLLECTOR_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "Twitter collection completed" if success else "Twitter collection failed"
         })
     except Exception as e:
         return jsonify({
