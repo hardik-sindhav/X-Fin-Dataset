@@ -19,10 +19,9 @@ load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.WARNING,
+    format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('option_chain_collector.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
@@ -71,7 +70,7 @@ class NSEOptionChainCollector:
             # Create unique index on timestamp to prevent duplicates
             self.collection.create_index([("records.timestamp", 1)], unique=True)
             
-            logger.info(f"Successfully connected to MongoDB at {MONGO_HOST}:{MONGO_PORT}")
+            
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {str(e)}")
             raise
@@ -123,7 +122,7 @@ class NSEOptionChainCollector:
                 
                 # Always pick the first expiry date
                 first_expiry = expiry_dates[0]
-                logger.info(f"Successfully fetched expiry dates. Using first expiry: {first_expiry}")
+                
                 return first_expiry
                 
             except requests.exceptions.RequestException as e:
@@ -184,7 +183,7 @@ class NSEOptionChainCollector:
                         continue
                     return None
                 
-                logger.info(f"Successfully fetched option chain data. Timestamp: {timestamp}")
+                
                 return data
                 
             except requests.exceptions.RequestException as e:
@@ -263,7 +262,7 @@ class NSEOptionChainCollector:
         Returns: True if successful, False otherwise
         """
         try:
-            logger.info("Starting NSE option chain data collection...")
+            
             
             # Step 1: Fetch expiry dates and pick the first one
             expiry_date = self._fetch_expiry_dates_with_retry()
@@ -282,9 +281,7 @@ class NSEOptionChainCollector:
             # Step 3: Save entire response to MongoDB
             success = self._save_to_mongo(option_chain_data)
             
-            if success:
-                logger.info("NSE option chain data collection completed successfully")
-            else:
+            if not success:
                 logger.error("Failed to save option chain data to MongoDB")
             
             return success

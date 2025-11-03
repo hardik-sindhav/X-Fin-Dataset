@@ -13,14 +13,16 @@ import {
   AlertCircle,
   BarChart3,
   Newspaper,
-  MessageCircle
+  MessageCircle,
+  Menu,
+  X
 } from 'lucide-react'
 import './App.css'
 
 const API_BASE = '/api'
 
 function App() {
-  const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'news', or 'twitter'
+  const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'gainers', 'losers', or 'news'
   
   // FII/DII state
   const [status, setStatus] = useState(null)
@@ -36,6 +38,16 @@ function App() {
   const [bankniftyStatus, setBankniftyStatus] = useState(null)
   const [bankniftyData, setBankniftyData] = useState([])
   const [bankniftyStats, setBankniftyStats] = useState(null)
+  
+  // Finnifty state
+  const [finniftyStatus, setFinniftyStatus] = useState(null)
+  const [finniftyData, setFinniftyData] = useState([])
+  const [finniftyStats, setFinniftyStats] = useState(null)
+  
+  // MidcapNifty state
+  const [midcpniftyStatus, setMidcpniftyStatus] = useState(null)
+  const [midcpniftyData, setMidcpniftyData] = useState([])
+  const [midcpniftyStats, setMidcpniftyStats] = useState(null)
   
   // HDFC Bank state
   const [hdfcbankStatus, setHdfcbankStatus] = useState(null)
@@ -102,15 +114,25 @@ function App() {
   const [newsData, setNewsData] = useState([])
   const [newsStats, setNewsStats] = useState(null)
   
-  // Twitter state
-  const [twitterStatus, setTwitterStatus] = useState(null)
-  const [twitterData, setTwitterData] = useState([])
-  const [twitterStats, setTwitterStats] = useState(null)
+  // Gainers state
+  const [gainersStatus, setGainersStatus] = useState(null)
+  const [gainersData, setGainersData] = useState([])
+  const [gainersStats, setGainersStats] = useState(null)
   
-  const [loading, setLoading] = useState(true)
+  // Losers state
+  const [losersStatus, setLosersStatus] = useState(null)
+  const [losersData, setLosersData] = useState([])
+  const [losersStats, setLosersStats] = useState(null)
+  
+  const [loading, setLoading] = useState(false)
+  const [loadingTab, setLoadingTab] = useState(null)
+  const [loadedTabs, setLoadedTabs] = useState(new Set())
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [triggering, setTriggering] = useState(false)
   const [optionChainTriggering, setOptionChainTriggering] = useState(false)
   const [bankniftyTriggering, setBankniftyTriggering] = useState(false)
+  const [finniftyTriggering, setFinniftyTriggering] = useState(false)
+  const [midcpniftyTriggering, setMidcpniftyTriggering] = useState(false)
   const [hdfcbankTriggering, setHdfcbankTriggering] = useState(false)
   const [icicibankTriggering, setIcicibankTriggering] = useState(false)
   const [sbinTriggering, setSbinTriggering] = useState(false)
@@ -123,163 +145,275 @@ function App() {
   const [indusindbkTriggering, setIndusindbkTriggering] = useState(false)
   const [idfcfirstbTriggering, setIdfcfirstbTriggering] = useState(false)
   const [federalbnkTriggering, setFederalbnkTriggering] = useState(false)
+  const [gainersTriggering, setGainersTriggering] = useState(false)
+  const [losersTriggering, setLosersTriggering] = useState(false)
   const [newsTriggering, setNewsTriggering] = useState(false)
-  const [twitterTriggering, setTwitterTriggering] = useState(false)
 
-  const fetchData = async () => {
+  // Fetch data for a specific tab only if not already loaded
+  const fetchTabData = async (tabName, forceRefresh = false) => {
+    // Skip if already loaded and not forcing refresh
+    if (!forceRefresh && loadedTabs.has(tabName)) {
+      return
+    }
+
+    setLoadingTab(tabName)
+
     try {
-      const [
-        statusRes, dataRes, statsRes, 
-        optionChainStatusRes, optionChainDataRes, optionChainStatsRes, 
-        bankniftyStatusRes, bankniftyDataRes, bankniftyStatsRes,
-        hdfcbankStatusRes, hdfcbankDataRes, hdfcbankStatsRes,
-        icicibankStatusRes, icicibankDataRes, icicibankStatsRes,
-        sbinStatusRes, sbinDataRes, sbinStatsRes,
-        kotakbankStatusRes, kotakbankDataRes, kotakbankStatsRes,
-        axisbankStatusRes, axisbankDataRes, axisbankStatsRes,
-        bankbarodaStatusRes, bankbarodaDataRes, bankbarodaStatsRes,
-        pnbStatusRes, pnbDataRes, pnbStatsRes,
-        canbkStatusRes, canbkDataRes, canbkStatsRes,
-        aubankStatusRes, aubankDataRes, aubankStatsRes,
-        indusindbkStatusRes, indusindbkDataRes, indusindbkStatsRes,
-        idfcfirstbStatusRes, idfcfirstbDataRes, idfcfirstbStatsRes,
-        federalbnkStatusRes, federalbnkDataRes, federalbnkStatsRes,
-        newsStatusRes, newsDataRes, newsStatsRes,
-        twitterStatusRes, twitterDataRes, twitterStatsRes
-      ] = await Promise.all([
-        axios.get(`${API_BASE}/status`),
-        axios.get(`${API_BASE}/data`),
-        axios.get(`${API_BASE}/stats`),
-        axios.get(`${API_BASE}/option-chain/status`),
-        axios.get(`${API_BASE}/option-chain/data`),
-        axios.get(`${API_BASE}/option-chain/stats`),
-        axios.get(`${API_BASE}/banknifty/status`),
-        axios.get(`${API_BASE}/banknifty/data`),
-        axios.get(`${API_BASE}/banknifty/stats`),
-        axios.get(`${API_BASE}/hdfcbank/status`),
-        axios.get(`${API_BASE}/hdfcbank/data`),
-        axios.get(`${API_BASE}/hdfcbank/stats`),
-        axios.get(`${API_BASE}/icicibank/status`),
-        axios.get(`${API_BASE}/icicibank/data`),
-        axios.get(`${API_BASE}/icicibank/stats`),
-        axios.get(`${API_BASE}/sbin/status`),
-        axios.get(`${API_BASE}/sbin/data`),
-        axios.get(`${API_BASE}/sbin/stats`),
-        axios.get(`${API_BASE}/kotakbank/status`),
-        axios.get(`${API_BASE}/kotakbank/data`),
-        axios.get(`${API_BASE}/kotakbank/stats`),
-        axios.get(`${API_BASE}/axisbank/status`),
-        axios.get(`${API_BASE}/axisbank/data`),
-        axios.get(`${API_BASE}/axisbank/stats`),
-        axios.get(`${API_BASE}/bankbaroda/status`),
-        axios.get(`${API_BASE}/bankbaroda/data`),
-        axios.get(`${API_BASE}/bankbaroda/stats`),
-        axios.get(`${API_BASE}/pnb/status`),
-        axios.get(`${API_BASE}/pnb/data`),
-        axios.get(`${API_BASE}/pnb/stats`),
-        axios.get(`${API_BASE}/canbk/status`),
-        axios.get(`${API_BASE}/canbk/data`),
-        axios.get(`${API_BASE}/canbk/stats`),
-        axios.get(`${API_BASE}/aubank/status`),
-        axios.get(`${API_BASE}/aubank/data`),
-        axios.get(`${API_BASE}/aubank/stats`),
-        axios.get(`${API_BASE}/indusindbk/status`),
-        axios.get(`${API_BASE}/indusindbk/data`),
-        axios.get(`${API_BASE}/indusindbk/stats`),
-        axios.get(`${API_BASE}/idfcfirstb/status`),
-        axios.get(`${API_BASE}/idfcfirstb/data`),
-        axios.get(`${API_BASE}/idfcfirstb/stats`),
-        axios.get(`${API_BASE}/federalbnk/status`),
-        axios.get(`${API_BASE}/federalbnk/data`),
-        axios.get(`${API_BASE}/federalbnk/stats`),
-        axios.get(`${API_BASE}/news/status`),
-        axios.get(`${API_BASE}/news/data`),
-        axios.get(`${API_BASE}/news/stats`),
-        axios.get(`${API_BASE}/twitter/status`),
-        axios.get(`${API_BASE}/twitter/data`),
-        axios.get(`${API_BASE}/twitter/stats`)
-      ])
+      switch (tabName) {
+        case 'fiidii':
+          const [statusRes, dataRes, statsRes] = await Promise.all([
+            axios.get(`${API_BASE}/status`),
+            axios.get(`${API_BASE}/data`),
+            axios.get(`${API_BASE}/stats`)
+          ])
+          setStatus(statusRes.data)
+          setData(dataRes.data.data || [])
+          setStats(statsRes.data.stats)
+          break
 
-      setStatus(statusRes.data)
-      setData(dataRes.data.data || [])
-      setStats(statsRes.data.stats)
-      
-      setOptionChainStatus(optionChainStatusRes.data)
-      setOptionChainData(optionChainDataRes.data.data || [])
-      setOptionChainStats(optionChainStatsRes.data.stats)
-      
-      setBankniftyStatus(bankniftyStatusRes.data)
-      setBankniftyData(bankniftyDataRes.data.data || [])
-      setBankniftyStats(bankniftyStatsRes.data.stats)
-      
-      setHdfcbankStatus(hdfcbankStatusRes.data)
-      setHdfcbankData(hdfcbankDataRes.data.data || [])
-      setHdfcbankStats(hdfcbankStatsRes.data.stats)
-      
-      setIcicibankStatus(icicibankStatusRes.data)
-      setIcicibankData(icicibankDataRes.data.data || [])
-      setIcicibankStats(icicibankStatsRes.data.stats)
-      
-      setSbinStatus(sbinStatusRes.data)
-      setSbinData(sbinDataRes.data.data || [])
-      setSbinStats(sbinStatsRes.data.stats)
-      
-      setKotakbankStatus(kotakbankStatusRes.data)
-      setKotakbankData(kotakbankDataRes.data.data || [])
-      setKotakbankStats(kotakbankStatsRes.data.stats)
-      
-      setAxisbankStatus(axisbankStatusRes.data)
-      setAxisbankData(axisbankDataRes.data.data || [])
-      setAxisbankStats(axisbankStatsRes.data.stats)
-      
-      setBankbarodaStatus(bankbarodaStatusRes.data)
-      setBankbarodaData(bankbarodaDataRes.data.data || [])
-      setBankbarodaStats(bankbarodaStatsRes.data.stats)
-      
-      setPnbStatus(pnbStatusRes.data)
-      setPnbData(pnbDataRes.data.data || [])
-      setPnbStats(pnbStatsRes.data.stats)
-      
-      setCanbkStatus(canbkStatusRes.data)
-      setCanbkData(canbkDataRes.data.data || [])
-      setCanbkStats(canbkStatsRes.data.stats)
-      
-      setAubankStatus(aubankStatusRes.data)
-      setAubankData(aubankDataRes.data.data || [])
-      setAubankStats(aubankStatsRes.data.stats)
-      
-      setIndusindbkStatus(indusindbkStatusRes.data)
-      setIndusindbkData(indusindbkDataRes.data.data || [])
-      setIndusindbkStats(indusindbkStatsRes.data.stats)
-      
-      setIdfcfirstbStatus(idfcfirstbStatusRes.data)
-      setIdfcfirstbData(idfcfirstbDataRes.data.data || [])
-      setIdfcfirstbStats(idfcfirstbStatsRes.data.stats)
-      
-      setFederalbnkStatus(federalbnkStatusRes.data)
-      setFederalbnkData(federalbnkDataRes.data.data || [])
-      setFederalbnkStats(federalbnkStatsRes.data.stats)
-      
-      setNewsStatus(newsStatusRes.data)
-      setNewsData(newsDataRes.data.data || [])
-      setNewsStats(newsStatsRes.data.stats)
-      
-      setTwitterStatus(twitterStatusRes.data)
-      setTwitterData(twitterDataRes.data.data || [])
-      setTwitterStats(twitterStatsRes.data.stats)
-      
-      setLoading(false)
+        case 'option-chain':
+          const [optStatusRes, optDataRes, optStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/option-chain/status`),
+            axios.get(`${API_BASE}/option-chain/data`),
+            axios.get(`${API_BASE}/option-chain/stats`)
+          ])
+          setOptionChainStatus(optStatusRes.data)
+          setOptionChainData(optDataRes.data.data || [])
+          setOptionChainStats(optStatsRes.data.stats)
+          break
+
+        case 'banknifty':
+          const [bnStatusRes, bnDataRes, bnStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/banknifty/status`),
+            axios.get(`${API_BASE}/banknifty/data`),
+            axios.get(`${API_BASE}/banknifty/stats`)
+          ])
+          setBankniftyStatus(bnStatusRes.data)
+          setBankniftyData(bnDataRes.data.data || [])
+          setBankniftyStats(bnStatsRes.data.stats)
+          break
+
+        case 'finnifty':
+          const [fnStatusRes, fnDataRes, fnStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/finnifty/status`),
+            axios.get(`${API_BASE}/finnifty/data`),
+            axios.get(`${API_BASE}/finnifty/stats`)
+          ])
+          setFinniftyStatus(fnStatusRes.data)
+          setFinniftyData(fnDataRes.data.data || [])
+          setFinniftyStats(fnStatsRes.data.stats)
+          break
+
+        case 'midcpnifty':
+          const [midcpStatusRes, midcpDataRes, midcpStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/midcpnifty/status`),
+            axios.get(`${API_BASE}/midcpnifty/data`),
+            axios.get(`${API_BASE}/midcpnifty/stats`)
+          ])
+          setMidcpniftyStatus(midcpStatusRes.data)
+          setMidcpniftyData(midcpDataRes.data.data || [])
+          setMidcpniftyStats(midcpStatsRes.data.stats)
+          break
+
+        case 'hdfcbank':
+          const [hdfcStatusRes, hdfcDataRes, hdfcStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/hdfcbank/status`),
+            axios.get(`${API_BASE}/hdfcbank/data`),
+            axios.get(`${API_BASE}/hdfcbank/stats`)
+          ])
+          setHdfcbankStatus(hdfcStatusRes.data)
+          setHdfcbankData(hdfcDataRes.data.data || [])
+          setHdfcbankStats(hdfcStatsRes.data.stats)
+          break
+
+        case 'icicibank':
+          const [iciciStatusRes, iciciDataRes, iciciStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/icicibank/status`),
+            axios.get(`${API_BASE}/icicibank/data`),
+            axios.get(`${API_BASE}/icicibank/stats`)
+          ])
+          setIcicibankStatus(iciciStatusRes.data)
+          setIcicibankData(iciciDataRes.data.data || [])
+          setIcicibankStats(iciciStatsRes.data.stats)
+          break
+
+        case 'sbin':
+          const [sbinStatusRes, sbinDataRes, sbinStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/sbin/status`),
+            axios.get(`${API_BASE}/sbin/data`),
+            axios.get(`${API_BASE}/sbin/stats`)
+          ])
+          setSbinStatus(sbinStatusRes.data)
+          setSbinData(sbinDataRes.data.data || [])
+          setSbinStats(sbinStatsRes.data.stats)
+          break
+
+        case 'kotakbank':
+          const [kotakStatusRes, kotakDataRes, kotakStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/kotakbank/status`),
+            axios.get(`${API_BASE}/kotakbank/data`),
+            axios.get(`${API_BASE}/kotakbank/stats`)
+          ])
+          setKotakbankStatus(kotakStatusRes.data)
+          setKotakbankData(kotakDataRes.data.data || [])
+          setKotakbankStats(kotakStatsRes.data.stats)
+          break
+
+        case 'axisbank':
+          const [axisStatusRes, axisDataRes, axisStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/axisbank/status`),
+            axios.get(`${API_BASE}/axisbank/data`),
+            axios.get(`${API_BASE}/axisbank/stats`)
+          ])
+          setAxisbankStatus(axisStatusRes.data)
+          setAxisbankData(axisDataRes.data.data || [])
+          setAxisbankStats(axisStatsRes.data.stats)
+          break
+
+        case 'bankbaroda':
+          const [bbStatusRes, bbDataRes, bbStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/bankbaroda/status`),
+            axios.get(`${API_BASE}/bankbaroda/data`),
+            axios.get(`${API_BASE}/bankbaroda/stats`)
+          ])
+          setBankbarodaStatus(bbStatusRes.data)
+          setBankbarodaData(bbDataRes.data.data || [])
+          setBankbarodaStats(bbStatsRes.data.stats)
+          break
+
+        case 'pnb':
+          const [pnbStatusRes, pnbDataRes, pnbStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/pnb/status`),
+            axios.get(`${API_BASE}/pnb/data`),
+            axios.get(`${API_BASE}/pnb/stats`)
+          ])
+          setPnbStatus(pnbStatusRes.data)
+          setPnbData(pnbDataRes.data.data || [])
+          setPnbStats(pnbStatsRes.data.stats)
+          break
+
+        case 'canbk':
+          const [canbkStatusRes, canbkDataRes, canbkStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/canbk/status`),
+            axios.get(`${API_BASE}/canbk/data`),
+            axios.get(`${API_BASE}/canbk/stats`)
+          ])
+          setCanbkStatus(canbkStatusRes.data)
+          setCanbkData(canbkDataRes.data.data || [])
+          setCanbkStats(canbkStatsRes.data.stats)
+          break
+
+        case 'aubank':
+          const [aubankStatusRes, aubankDataRes, aubankStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/aubank/status`),
+            axios.get(`${API_BASE}/aubank/data`),
+            axios.get(`${API_BASE}/aubank/stats`)
+          ])
+          setAubankStatus(aubankStatusRes.data)
+          setAubankData(aubankDataRes.data.data || [])
+          setAubankStats(aubankStatsRes.data.stats)
+          break
+
+        case 'indusindbk':
+          const [indusindStatusRes, indusindDataRes, indusindStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/indusindbk/status`),
+            axios.get(`${API_BASE}/indusindbk/data`),
+            axios.get(`${API_BASE}/indusindbk/stats`)
+          ])
+          setIndusindbkStatus(indusindStatusRes.data)
+          setIndusindbkData(indusindDataRes.data.data || [])
+          setIndusindbkStats(indusindStatsRes.data.stats)
+          break
+
+        case 'idfcfirstb':
+          const [idfcStatusRes, idfcDataRes, idfcStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/idfcfirstb/status`),
+            axios.get(`${API_BASE}/idfcfirstb/data`),
+            axios.get(`${API_BASE}/idfcfirstb/stats`)
+          ])
+          setIdfcfirstbStatus(idfcStatusRes.data)
+          setIdfcfirstbData(idfcDataRes.data.data || [])
+          setIdfcfirstbStats(idfcStatsRes.data.stats)
+          break
+
+        case 'federalbnk':
+          const [federalStatusRes, federalDataRes, federalStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/federalbnk/status`),
+            axios.get(`${API_BASE}/federalbnk/data`),
+            axios.get(`${API_BASE}/federalbnk/stats`)
+          ])
+          setFederalbnkStatus(federalStatusRes.data)
+          setFederalbnkData(federalDataRes.data.data || [])
+          setFederalbnkStats(federalStatsRes.data.stats)
+          break
+
+        case 'gainers':
+          const [gainersStatusRes, gainersDataRes, gainersStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/gainers/status`),
+            axios.get(`${API_BASE}/gainers/data`),
+            axios.get(`${API_BASE}/gainers/stats`)
+          ])
+          setGainersStatus(gainersStatusRes.data)
+          setGainersData(gainersDataRes.data.data || [])
+          setGainersStats(gainersStatsRes.data.stats)
+          break
+
+        case 'losers':
+          const [losersStatusRes, losersDataRes, losersStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/losers/status`),
+            axios.get(`${API_BASE}/losers/data`),
+            axios.get(`${API_BASE}/losers/stats`)
+          ])
+          setLosersStatus(losersStatusRes.data)
+          setLosersData(losersDataRes.data.data || [])
+          setLosersStats(losersStatsRes.data.stats)
+          break
+
+        case 'news':
+          const [newsStatusRes, newsDataRes, newsStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/news/status`),
+            axios.get(`${API_BASE}/news/data`),
+            axios.get(`${API_BASE}/news/stats`)
+          ])
+          setNewsStatus(newsStatusRes.data)
+          setNewsData(newsDataRes.data.data || [])
+          setNewsStats(newsStatsRes.data.stats)
+          break
+
+        default:
+          break
+      }
+
+      // Mark tab as loaded
+      setLoadedTabs(prev => new Set([...prev, tabName]))
     } catch (error) {
-      console.error('Error fetching data:', error)
-      setLoading(false)
+      console.error(`Error fetching data for ${tabName}:`, error)
+    } finally {
+      setLoadingTab(null)
     }
   }
 
-  useEffect(() => {
-    fetchData()
-    const interval = setInterval(fetchData, 30000) // Refresh every 30s
-    return () => clearInterval(interval)
-  }, [])
+  // Handle tab change - fetch data if not loaded
+  const handleTabChange = (tabName) => {
+    setActiveTab(tabName)
+    fetchTabData(tabName)
+    // Close sidebar on mobile after selecting a tab
+    if (window.innerWidth <= 768) {
+      setSidebarOpen(false)
+    }
+  }
+
+  // Toggle sidebar on mobile
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen)
+  }
+
+  // Refresh function - force reload current tab
+  const refreshCurrentTab = () => {
+    if (activeTab) {
+      fetchTabData(activeTab, true)
+    }
+  }
 
   const handleTrigger = async () => {
     setTriggering(true)
@@ -287,7 +421,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/trigger`)
       if (res.data.success) {
         alert('✅ FII/DII Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('fiidii', true), 2000)
       } else {
         alert('❌ Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -304,7 +438,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/option-chain/trigger`)
       if (res.data.success) {
         alert('✅ NIFTY Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('option-chain', true), 2000)
       } else {
         alert('❌ NIFTY Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -321,7 +455,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/banknifty/trigger`)
       if (res.data.success) {
         alert('✅ BankNifty Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('banknifty', true), 2000)
       } else {
         alert('❌ BankNifty Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -332,13 +466,47 @@ function App() {
     }
   }
 
+  const handleFinniftyTrigger = async () => {
+    setFinniftyTriggering(true)
+    try {
+      const res = await axios.post(`${API_BASE}/finnifty/trigger`)
+      if (res.data.success) {
+        alert('✅ Finnifty Option Chain Data collection completed successfully!')
+        setTimeout(() => fetchTabData('finnifty', true), 2000)
+      } else {
+        alert('❌ Finnifty Option Chain Data collection failed: ' + (res.data.error || res.data.message))
+      }
+    } catch (error) {
+      alert('❌ Error: ' + error.message)
+    } finally {
+      setFinniftyTriggering(false)
+    }
+  }
+
+  const handleMidcpniftyTrigger = async () => {
+    setMidcpniftyTriggering(true)
+    try {
+      const res = await axios.post(`${API_BASE}/midcpnifty/trigger`)
+      if (res.data.success) {
+        alert('✅ MidcapNifty Option Chain Data collection completed successfully!')
+        setTimeout(() => fetchTabData('midcpnifty', true), 2000)
+      } else {
+        alert('❌ MidcapNifty Option Chain Data collection failed: ' + (res.data.error || res.data.message))
+      }
+    } catch (error) {
+      alert('❌ Error: ' + error.message)
+    } finally {
+      setMidcpniftyTriggering(false)
+    }
+  }
+
   const handleHdfcbankTrigger = async () => {
     setHdfcbankTriggering(true)
     try {
       const res = await axios.post(`${API_BASE}/hdfcbank/trigger`)
       if (res.data.success) {
         alert('✅ HDFC Bank Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('hdfcbank', true), 2000)
       } else {
         alert('❌ HDFC Bank Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -355,7 +523,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/icicibank/trigger`)
       if (res.data.success) {
         alert('✅ ICICI Bank Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('icicibank', true), 2000)
       } else {
         alert('❌ ICICI Bank Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -372,7 +540,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/sbin/trigger`)
       if (res.data.success) {
         alert('✅ SBIN Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('sbin', true), 2000)
       } else {
         alert('❌ SBIN Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -389,7 +557,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/kotakbank/trigger`)
       if (res.data.success) {
         alert('✅ Kotak Bank Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('kotakbank', true), 2000)
       } else {
         alert('❌ Kotak Bank Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -406,7 +574,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/axisbank/trigger`)
       if (res.data.success) {
         alert('✅ Axis Bank Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('axisbank', true), 2000)
       } else {
         alert('❌ Axis Bank Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -423,7 +591,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/bankbaroda/trigger`)
       if (res.data.success) {
         alert('✅ Bank of Baroda Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('bankbaroda', true), 2000)
       } else {
         alert('❌ Bank of Baroda Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -440,7 +608,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/pnb/trigger`)
       if (res.data.success) {
         alert('✅ PNB Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('pnb', true), 2000)
       } else {
         alert('❌ PNB Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -457,7 +625,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/canbk/trigger`)
       if (res.data.success) {
         alert('✅ CANBK Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('canbk', true), 2000)
       } else {
         alert('❌ CANBK Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -474,7 +642,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/aubank/trigger`)
       if (res.data.success) {
         alert('✅ AUBANK Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('aubank', true), 2000)
       } else {
         alert('❌ AUBANK Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -491,7 +659,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/indusindbk/trigger`)
       if (res.data.success) {
         alert('✅ INDUSINDBK Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('indusindbk', true), 2000)
       } else {
         alert('❌ INDUSINDBK Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -508,7 +676,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/idfcfirstb/trigger`)
       if (res.data.success) {
         alert('✅ IDFCFIRSTB Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('idfcfirstb', true), 2000)
       } else {
         alert('❌ IDFCFIRSTB Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -525,7 +693,7 @@ function App() {
       const res = await axios.post(`${API_BASE}/federalbnk/trigger`)
       if (res.data.success) {
         alert('✅ FEDERALBNK Option Chain Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('federalbnk', true), 2000)
       } else {
         alert('❌ FEDERALBNK Option Chain Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -536,13 +704,47 @@ function App() {
     }
   }
 
+  const handleGainersTrigger = async () => {
+    setGainersTriggering(true)
+    try {
+      const res = await axios.post(`${API_BASE}/gainers/trigger`)
+      if (res.data.success) {
+        alert('✅ Top 20 Gainers Data collection completed successfully!')
+        setTimeout(() => fetchTabData('gainers', true), 2000)
+      } else {
+        alert('❌ Top 20 Gainers Data collection failed: ' + (res.data.error || res.data.message))
+      }
+    } catch (error) {
+      alert('❌ Error: ' + error.message)
+    } finally {
+      setGainersTriggering(false)
+    }
+  }
+
+  const handleLosersTrigger = async () => {
+    setLosersTriggering(true)
+    try {
+      const res = await axios.post(`${API_BASE}/losers/trigger`)
+      if (res.data.success) {
+        alert('✅ Top 20 Losers Data collection completed successfully!')
+        setTimeout(() => fetchTabData('losers', true), 2000)
+      } else {
+        alert('❌ Top 20 Losers Data collection failed: ' + (res.data.error || res.data.message))
+      }
+    } catch (error) {
+      alert('❌ Error: ' + error.message)
+    } finally {
+      setLosersTriggering(false)
+    }
+  }
+
   const handleNewsTrigger = async () => {
     setNewsTriggering(true)
     try {
       const res = await axios.post(`${API_BASE}/news/trigger`)
       if (res.data.success) {
         alert('✅ News Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
+        setTimeout(() => fetchTabData('news', true), 2000)
       } else {
         alert('❌ News Data collection failed: ' + (res.data.error || res.data.message))
       }
@@ -553,22 +755,6 @@ function App() {
     }
   }
 
-  const handleTwitterTrigger = async () => {
-    setTwitterTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/twitter/trigger`)
-      if (res.data.success) {
-        alert('✅ Twitter Data collection completed successfully!')
-        setTimeout(fetchData, 2000)
-      } else {
-        alert('❌ Twitter Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setTwitterTriggering(false)
-    }
-  }
 
   const getSentimentColor = (sentiment) => {
     if (sentiment === 'Positive') return 'positive'
@@ -588,11 +774,11 @@ function App() {
     return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
-  if (loading) {
+  if (loadingTab) {
     return (
       <div className="loading-container">
         <div className="spinner"></div>
-        <p>Loading...</p>
+        <p className="loading-text">Loading {loadingTab} data...</p>
       </div>
     )
   }
@@ -601,145 +787,197 @@ function App() {
     <div className="app">
       <header className="header">
         <div className="header-content">
-          <h1>
-            <Activity className="icon" />
-            NSE Data Collector Admin Panel
-          </h1>
-          <p>Monitor and Manage FII/DII & Option Chain Data Collection</p>
+          <div className="header-brand">
+            <button className="menu-toggle" onClick={toggleSidebar}>
+              <Menu size={24} />
+            </button>
+            <div className="brand-logo">
+              <Activity size={24} />
+            </div>
+            <h1>X Fin Ai</h1>
+          </div>
         </div>
       </header>
 
-      {/* Tabs */}
-      <div className="tabs">
-        <button 
-          className={`tab ${activeTab === 'fiidii' ? 'active' : ''}`}
-          onClick={() => setActiveTab('fiidii')}
-        >
-          <Activity size={18} />
-          FII/DII Data
-        </button>
-        <button 
-          className={`tab ${activeTab === 'option-chain' ? 'active' : ''}`}
-          onClick={() => setActiveTab('option-chain')}
-        >
-          <BarChart3 size={18} />
-          NIFTY Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'banknifty' ? 'active' : ''}`}
-          onClick={() => setActiveTab('banknifty')}
-        >
-          <BarChart3 size={18} />
-          BankNifty Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'hdfcbank' ? 'active' : ''}`}
-          onClick={() => setActiveTab('hdfcbank')}
-        >
-          <BarChart3 size={18} />
-          HDFC Bank Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'icicibank' ? 'active' : ''}`}
-          onClick={() => setActiveTab('icicibank')}
-        >
-          <BarChart3 size={18} />
-          ICICI Bank Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'sbin' ? 'active' : ''}`}
-          onClick={() => setActiveTab('sbin')}
-        >
-          <BarChart3 size={18} />
-          SBIN Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'kotakbank' ? 'active' : ''}`}
-          onClick={() => setActiveTab('kotakbank')}
-        >
-          <BarChart3 size={18} />
-          Kotak Bank Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'axisbank' ? 'active' : ''}`}
-          onClick={() => setActiveTab('axisbank')}
-        >
-          <BarChart3 size={18} />
-          Axis Bank Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'bankbaroda' ? 'active' : ''}`}
-          onClick={() => setActiveTab('bankbaroda')}
-        >
-          <BarChart3 size={18} />
-          Bank of Baroda Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'pnb' ? 'active' : ''}`}
-          onClick={() => setActiveTab('pnb')}
-        >
-          <BarChart3 size={18} />
-          PNB Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'canbk' ? 'active' : ''}`}
-          onClick={() => setActiveTab('canbk')}
-        >
-          <BarChart3 size={18} />
-          CANBK Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'aubank' ? 'active' : ''}`}
-          onClick={() => setActiveTab('aubank')}
-        >
-          <BarChart3 size={18} />
-          AUBANK Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'indusindbk' ? 'active' : ''}`}
-          onClick={() => setActiveTab('indusindbk')}
-        >
-          <BarChart3 size={18} />
-          INDUSINDBK Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'idfcfirstb' ? 'active' : ''}`}
-          onClick={() => setActiveTab('idfcfirstb')}
-        >
-          <BarChart3 size={18} />
-          IDFCFIRSTB Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'federalbnk' ? 'active' : ''}`}
-          onClick={() => setActiveTab('federalbnk')}
-        >
-          <BarChart3 size={18} />
-          FEDERALBNK Option Chain
-        </button>
-        <button 
-          className={`tab ${activeTab === 'news' ? 'active' : ''}`}
-          onClick={() => setActiveTab('news')}
-        >
-          <Newspaper size={18} />
-          News & Sentiment
-        </button>
-        <button 
-          className={`tab ${activeTab === 'twitter' ? 'active' : ''}`}
-          onClick={() => setActiveTab('twitter')}
-        >
-          <MessageCircle size={18} />
-          Twitter & Sentiment
-        </button>
-      </div>
+      {/* Sidebar Overlay for mobile */}
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)}></div>}
 
-      <div className="container">
+      {/* Sidebar */}
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-header">
+          <h2>Menu</h2>
+          <button className="sidebar-close" onClick={() => setSidebarOpen(false)}>
+            <X size={24} />
+          </button>
+        </div>
+        <div className="sidebar-section">
+          <div className="sidebar-section-title">Market Data</div>
+          <ul className="sidebar-menu">
+            <li 
+              className={`sidebar-item ${activeTab === 'fiidii' ? 'active' : ''}`}
+              onClick={() => handleTabChange('fiidii')}
+            >
+              <Activity size={20} />
+              FII/DII Data
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'gainers' ? 'active' : ''}`}
+              onClick={() => handleTabChange('gainers')}
+            >
+              <TrendingUp size={20} />
+              Top 20 Gainers
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'losers' ? 'active' : ''}`}
+              onClick={() => handleTabChange('losers')}
+            >
+              <TrendingDown size={20} />
+              Top 20 Losers
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'news' ? 'active' : ''}`}
+              onClick={() => handleTabChange('news')}
+            >
+              <Newspaper size={20} />
+              News & Sentiment
+            </li>
+          </ul>
+        </div>
+
+        <div className="sidebar-section">
+          <div className="sidebar-section-title">Index Options</div>
+          <ul className="sidebar-menu">
+            <li 
+              className={`sidebar-item ${activeTab === 'option-chain' ? 'active' : ''}`}
+              onClick={() => handleTabChange('option-chain')}
+            >
+              <BarChart3 size={20} />
+              NIFTY
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'banknifty' ? 'active' : ''}`}
+              onClick={() => handleTabChange('banknifty')}
+            >
+              <BarChart3 size={20} />
+              BankNifty
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'finnifty' ? 'active' : ''}`}
+              onClick={() => handleTabChange('finnifty')}
+            >
+              <BarChart3 size={20} />
+              Finnifty
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'midcpnifty' ? 'active' : ''}`}
+              onClick={() => handleTabChange('midcpnifty')}
+            >
+              <BarChart3 size={20} />
+              MidcapNifty
+            </li>
+          </ul>
+        </div>
+
+        <div className="sidebar-section">
+          <div className="sidebar-section-title">Bank Options</div>
+          <ul className="sidebar-menu">
+            <li 
+              className={`sidebar-item ${activeTab === 'hdfcbank' ? 'active' : ''}`}
+              onClick={() => handleTabChange('hdfcbank')}
+            >
+              <BarChart3 size={20} />
+              HDFC Bank
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'icicibank' ? 'active' : ''}`}
+              onClick={() => handleTabChange('icicibank')}
+            >
+              <BarChart3 size={20} />
+              ICICI Bank
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'sbin' ? 'active' : ''}`}
+              onClick={() => handleTabChange('sbin')}
+            >
+              <BarChart3 size={20} />
+              SBIN
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'kotakbank' ? 'active' : ''}`}
+              onClick={() => handleTabChange('kotakbank')}
+            >
+              <BarChart3 size={20} />
+              Kotak Bank
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'axisbank' ? 'active' : ''}`}
+              onClick={() => handleTabChange('axisbank')}
+            >
+              <BarChart3 size={20} />
+              Axis Bank
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'bankbaroda' ? 'active' : ''}`}
+              onClick={() => handleTabChange('bankbaroda')}
+            >
+              <BarChart3 size={20} />
+              Bank of Baroda
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'pnb' ? 'active' : ''}`}
+              onClick={() => handleTabChange('pnb')}
+            >
+              <BarChart3 size={20} />
+              PNB
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'canbk' ? 'active' : ''}`}
+              onClick={() => handleTabChange('canbk')}
+            >
+              <BarChart3 size={20} />
+              CANBK
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'aubank' ? 'active' : ''}`}
+              onClick={() => handleTabChange('aubank')}
+            >
+              <BarChart3 size={20} />
+              AUBANK
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'indusindbk' ? 'active' : ''}`}
+              onClick={() => handleTabChange('indusindbk')}
+            >
+              <BarChart3 size={20} />
+              IndusInd Bank
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'idfcfirstb' ? 'active' : ''}`}
+              onClick={() => handleTabChange('idfcfirstb')}
+            >
+              <BarChart3 size={20} />
+              IDFC First Bank
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'federalbnk' ? 'active' : ''}`}
+              onClick={() => handleTabChange('federalbnk')}
+            >
+              <BarChart3 size={20} />
+              Federal Bank
+            </li>
+          </ul>
+        </div>
+      </aside>
+
+      <main className="main-content">
+        <div className="container">
         {activeTab === 'fiidii' ? (
           <>
             {/* FII/DII Status Card */}
             <div className="card status-card">
               <div className="card-header">
                 <h2>FII/DII Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -773,7 +1011,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -880,7 +1118,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>NIFTY Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -914,7 +1152,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -1009,7 +1247,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>BankNifty Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -1043,7 +1281,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -1132,13 +1370,271 @@ function App() {
               )}
             </div>
           </>
+        ) : activeTab === 'finnifty' ? (
+          <>
+            {/* Finnifty Option Chain Status Card */}
+            <div className="card status-card">
+              <div className="card-header">
+                <h2>Finnifty Option Chain Cronjob Status</h2>
+                <button onClick={refreshCurrentTab} className="btn-icon">
+                  <RefreshCw size={20} />
+                </button>
+              </div>
+
+              <div className="status-grid">
+                <StatusItem
+                  label="Status"
+                  value={finniftyStatus?.running ? 'Running' : 'Stopped'}
+                  icon={finniftyStatus?.running ? CheckCircle : XCircle}
+                  status={finniftyStatus?.running ? 'success' : 'danger'}
+                />
+                <StatusItem
+                  label="Next Run"
+                  value={formatDateTime(finniftyStatus?.next_run)}
+                  icon={Clock}
+                />
+                <StatusItem
+                  label="Last Run"
+                  value={formatDateTime(finniftyStatus?.last_run)}
+                  icon={Clock}
+                />
+                <StatusItem
+                  label="Last Status"
+                  value={finniftyStatus?.last_status ? 
+                    finniftyStatus.last_status.charAt(0).toUpperCase() + finniftyStatus.last_status.slice(1) : 
+                    'Unknown'}
+                  icon={finniftyStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
+                  status={finniftyStatus?.last_status === 'success' ? 'success' : 'warning'}
+                />
+              </div>
+
+              <div className="actions">
+                <button 
+                  onClick={refreshCurrentTab} 
+                  className="btn btn-secondary"
+                >
+                  <RefreshCw size={18} />
+                  Refresh Status
+                </button>
+                <button 
+                  onClick={handleFinniftyTrigger} 
+                  className="btn btn-primary"
+                  disabled={finniftyTriggering}
+                >
+                  <Play size={18} />
+                  {finniftyTriggering ? 'Processing...' : 'Trigger Collection Now'}
+                </button>
+              </div>
+            </div>
+
+            {/* Finnifty Option Chain Statistics Card */}
+            {finniftyStats && (
+              <div className="card stats-card">
+                <div className="card-header">
+                  <h2>Finnifty Option Chain Statistics</h2>
+                </div>
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <Database size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Total Records</div>
+                      <div className="stat-value">{finniftyStats.total_records || 0}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <Clock size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Latest Timestamp</div>
+                      <div className="stat-value">{finniftyStats.latest_timestamp || '-'}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <BarChart3 size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Latest Underlying Value</div>
+                      <div className="stat-value">{formatNumber(finniftyStats.latest_underlying_value)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Finnifty Option Chain Data Table Card */}
+            <div className="card data-card">
+              <div className="card-header">
+                <h2>Finnifty Option Chain Collected Data</h2>
+                <span className="badge">{finniftyData.length} records</span>
+              </div>
+
+              {finniftyData.length === 0 ? (
+                <div className="empty-state">
+                  <Database size={48} />
+                  <p>No data available</p>
+                </div>
+              ) : (
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Timestamp</th>
+                        <th>Underlying Value</th>
+                        <th>Data Count</th>
+                        <th>Inserted At</th>
+                        <th>Updated At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {finniftyData.map((record) => (
+                        <tr key={record._id}>
+                          <td className="date-cell">{record.timestamp || '-'}</td>
+                          <td>{formatNumber(record.underlyingValue)}</td>
+                          <td>{record.dataCount || 0}</td>
+                          <td className="muted">{formatDateTime(record.insertedAt)}</td>
+                          <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        ) : activeTab === 'midcpnifty' ? (
+          <>
+            {/* MidcapNifty Option Chain Status Card */}
+            <div className="card status-card">
+              <div className="card-header">
+                <h2>MidcapNifty Option Chain Cronjob Status</h2>
+                <button onClick={refreshCurrentTab} className="btn-icon">
+                  <RefreshCw size={20} />
+                </button>
+              </div>
+
+              <div className="status-grid">
+                <StatusItem
+                  label="Status"
+                  value={midcpniftyStatus?.running ? 'Running' : 'Stopped'}
+                  icon={midcpniftyStatus?.running ? CheckCircle : XCircle}
+                  status={midcpniftyStatus?.running ? 'success' : 'danger'}
+                />
+                <StatusItem
+                  label="Next Run"
+                  value={formatDateTime(midcpniftyStatus?.next_run)}
+                  icon={Clock}
+                />
+                <StatusItem
+                  label="Last Run"
+                  value={formatDateTime(midcpniftyStatus?.last_run)}
+                  icon={Clock}
+                />
+                <StatusItem
+                  label="Last Status"
+                  value={midcpniftyStatus?.last_status ? 
+                    midcpniftyStatus.last_status.charAt(0).toUpperCase() + midcpniftyStatus.last_status.slice(1) : 
+                    'Unknown'}
+                  icon={midcpniftyStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
+                  status={midcpniftyStatus?.last_status === 'success' ? 'success' : 'warning'}
+                />
+              </div>
+
+              <div className="actions">
+                <button 
+                  onClick={refreshCurrentTab} 
+                  className="btn btn-secondary"
+                >
+                  <RefreshCw size={18} />
+                  Refresh Status
+                </button>
+                <button 
+                  onClick={handleMidcpniftyTrigger} 
+                  className="btn btn-primary"
+                  disabled={midcpniftyTriggering}
+                >
+                  <Play size={18} />
+                  {midcpniftyTriggering ? 'Processing...' : 'Trigger Collection Now'}
+                </button>
+              </div>
+            </div>
+
+            {/* MidcapNifty Option Chain Statistics Card */}
+            {midcpniftyStats && (
+              <div className="card stats-card">
+                <div className="card-header">
+                  <h2>MidcapNifty Option Chain Statistics</h2>
+                </div>
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <Database size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Total Records</div>
+                      <div className="stat-value">{midcpniftyStats.total_records || 0}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <Clock size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Latest Timestamp</div>
+                      <div className="stat-value">{midcpniftyStats.latest_timestamp || '-'}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <BarChart3 size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Latest Underlying Value</div>
+                      <div className="stat-value">{formatNumber(midcpniftyStats.latest_underlying_value)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MidcapNifty Option Chain Data Table Card */}
+            <div className="card data-card">
+              <div className="card-header">
+                <h2>MidcapNifty Option Chain Collected Data</h2>
+                <span className="badge">{midcpniftyData.length} records</span>
+              </div>
+
+              {midcpniftyData.length === 0 ? (
+                <div className="empty-state">
+                  <Database size={48} />
+                  <p>No data available</p>
+                </div>
+              ) : (
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Timestamp</th>
+                        <th>Underlying Value</th>
+                        <th>Data Count</th>
+                        <th>Inserted At</th>
+                        <th>Updated At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {midcpniftyData.map((record) => (
+                        <tr key={record._id}>
+                          <td>{record.timestamp || '-'}</td>
+                          <td>{formatNumber(record.underlyingValue)}</td>
+                          <td>{record.dataCount || 0}</td>
+                          <td className="muted">{formatDateTime(record.insertedAt)}</td>
+                          <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
         ) : activeTab === 'hdfcbank' ? (
           <>
             {/* HDFC Bank Option Chain Status Card */}
             <div className="card status-card">
               <div className="card-header">
                 <h2>HDFC Bank Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -1172,7 +1668,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -1267,7 +1763,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>ICICI Bank Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -1301,7 +1797,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -1396,7 +1892,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>SBIN Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -1430,7 +1926,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -1525,7 +2021,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>Kotak Bank Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -1559,7 +2055,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -1654,7 +2150,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>Axis Bank Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -1688,7 +2184,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -1783,7 +2279,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>Bank of Baroda Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -1817,7 +2313,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -1912,7 +2408,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>PNB Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -1946,7 +2442,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -2041,7 +2537,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>CANBK Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -2075,7 +2571,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -2170,7 +2666,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>AUBANK Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -2204,7 +2700,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -2299,7 +2795,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>INDUSINDBK Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -2333,7 +2829,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -2428,7 +2924,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>IDFCFIRSTB Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -2462,7 +2958,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -2557,7 +3053,7 @@ function App() {
             <div className="card status-card">
               <div className="card-header">
                 <h2>FEDERALBNK Option Chain Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -2591,7 +3087,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -2680,13 +3176,289 @@ function App() {
               )}
             </div>
           </>
-        ) : (
+        ) : activeTab === 'gainers' ? (
+          <>
+            {/* Top 20 Gainers Status Card */}
+            <div className="card status-card">
+              <div className="card-header">
+                <h2>Top 20 Gainers Cronjob Status</h2>
+                <button onClick={refreshCurrentTab} className="btn-icon">
+                  <RefreshCw size={20} />
+                </button>
+              </div>
+
+              <div className="status-grid">
+                <StatusItem
+                  label="Status"
+                  value={gainersStatus?.running ? 'Running' : 'Stopped'}
+                  icon={gainersStatus?.running ? CheckCircle : XCircle}
+                  status={gainersStatus?.running ? 'success' : 'danger'}
+                />
+                <StatusItem
+                  label="Next Run"
+                  value={formatDateTime(gainersStatus?.next_run)}
+                  icon={Clock}
+                />
+                <StatusItem
+                  label="Last Run"
+                  value={formatDateTime(gainersStatus?.last_run)}
+                  icon={Clock}
+                />
+                <StatusItem
+                  label="Last Status"
+                  value={gainersStatus?.last_status ? 
+                    gainersStatus.last_status.charAt(0).toUpperCase() + gainersStatus.last_status.slice(1) : 
+                    'Unknown'}
+                  icon={gainersStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
+                  status={gainersStatus?.last_status === 'success' ? 'success' : 'warning'}
+                />
+              </div>
+
+              <div className="actions">
+                <button 
+                  onClick={refreshCurrentTab} 
+                  className="btn btn-secondary"
+                >
+                  <RefreshCw size={18} />
+                  Refresh Status
+                </button>
+                <button 
+                  onClick={handleGainersTrigger} 
+                  className="btn btn-primary"
+                  disabled={gainersTriggering}
+                >
+                  <Play size={18} />
+                  {gainersTriggering ? 'Processing...' : 'Trigger Collection Now'}
+                </button>
+              </div>
+            </div>
+
+            {/* Top 20 Gainers Statistics Card */}
+            {gainersStats && (
+              <div className="card stats-card">
+                <div className="card-header">
+                  <h2>Top 20 Gainers Statistics</h2>
+                </div>
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <Database size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Total Records</div>
+                      <div className="stat-value">{gainersStats.total_records || 0}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <Clock size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Latest Timestamp</div>
+                      <div className="stat-value">{gainersStats.latest_timestamp || '-'}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <TrendingUp size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Latest NIFTY Count</div>
+                      <div className="stat-value">{gainersStats.latest_nifty_count || 0}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <TrendingUp size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Latest BANKNIFTY Count</div>
+                      <div className="stat-value">{gainersStats.latest_banknifty_count || 0}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Top 20 Gainers Data Table Card */}
+            <div className="card data-card">
+              <div className="card-header">
+                <h2>Top 20 Gainers Collected Data</h2>
+                <span className="badge">{gainersData.length} records</span>
+              </div>
+
+              {gainersData.length === 0 ? (
+                <div className="empty-state">
+                  <Database size={48} />
+                  <p>No data available</p>
+                </div>
+              ) : (
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Timestamp</th>
+                        <th>NIFTY Count</th>
+                        <th>BANKNIFTY Count</th>
+                        <th>Legends Count</th>
+                        <th>Inserted At</th>
+                        <th>Updated At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gainersData.map((record) => (
+                        <tr key={record._id}>
+                          <td>{record.timestamp || '-'}</td>
+                          <td>{record.nifty_count || 0}</td>
+                          <td>{record.banknifty_count || 0}</td>
+                          <td>{record.legends?.length || 0}</td>
+                          <td className="muted">{formatDateTime(record.insertedAt)}</td>
+                          <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        ) : activeTab === 'losers' ? (
+          <>
+            {/* Top 20 Losers Status Card */}
+            <div className="card status-card">
+              <div className="card-header">
+                <h2>Top 20 Losers Cronjob Status</h2>
+                <button onClick={refreshCurrentTab} className="btn-icon">
+                  <RefreshCw size={20} />
+                </button>
+              </div>
+
+              <div className="status-grid">
+                <StatusItem
+                  label="Status"
+                  value={losersStatus?.running ? 'Running' : 'Stopped'}
+                  icon={losersStatus?.running ? CheckCircle : XCircle}
+                  status={losersStatus?.running ? 'success' : 'danger'}
+                />
+                <StatusItem
+                  label="Next Run"
+                  value={formatDateTime(losersStatus?.next_run)}
+                  icon={Clock}
+                />
+                <StatusItem
+                  label="Last Run"
+                  value={formatDateTime(losersStatus?.last_run)}
+                  icon={Clock}
+                />
+                <StatusItem
+                  label="Last Status"
+                  value={losersStatus?.last_status ? 
+                    losersStatus.last_status.charAt(0).toUpperCase() + losersStatus.last_status.slice(1) : 
+                    'Unknown'}
+                  icon={losersStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
+                  status={losersStatus?.last_status === 'success' ? 'success' : 'warning'}
+                />
+              </div>
+
+              <div className="actions">
+                <button 
+                  onClick={refreshCurrentTab} 
+                  className="btn btn-secondary"
+                >
+                  <RefreshCw size={18} />
+                  Refresh Status
+                </button>
+                <button 
+                  onClick={handleLosersTrigger} 
+                  className="btn btn-primary"
+                  disabled={losersTriggering}
+                >
+                  <Play size={18} />
+                  {losersTriggering ? 'Processing...' : 'Trigger Collection Now'}
+                </button>
+              </div>
+            </div>
+
+            {/* Top 20 Losers Statistics Card */}
+            {losersStats && (
+              <div className="card stats-card">
+                <div className="card-header">
+                  <h2>Top 20 Losers Statistics</h2>
+                </div>
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <Database size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Total Records</div>
+                      <div className="stat-value">{losersStats.total_records || 0}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <Clock size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Latest Timestamp</div>
+                      <div className="stat-value">{losersStats.latest_timestamp || '-'}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <TrendingDown size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Latest NIFTY Count</div>
+                      <div className="stat-value">{losersStats.latest_nifty_count || 0}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <TrendingDown size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Latest BANKNIFTY Count</div>
+                      <div className="stat-value">{losersStats.latest_banknifty_count || 0}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Top 20 Losers Data Table Card */}
+            <div className="card data-card">
+              <div className="card-header">
+                <h2>Top 20 Losers Collected Data</h2>
+                <span className="badge">{losersData.length} records</span>
+              </div>
+
+              {losersData.length === 0 ? (
+                <div className="empty-state">
+                  <Database size={48} />
+                  <p>No data available</p>
+                </div>
+              ) : (
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Timestamp</th>
+                        <th>NIFTY Count</th>
+                        <th>BANKNIFTY Count</th>
+                        <th>Legends Count</th>
+                        <th>Inserted At</th>
+                        <th>Updated At</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {losersData.map((record) => (
+                        <tr key={record._id}>
+                          <td>{record.timestamp || '-'}</td>
+                          <td>{record.nifty_count || 0}</td>
+                          <td>{record.banknifty_count || 0}</td>
+                          <td>{record.legends?.length || 0}</td>
+                          <td className="muted">{formatDateTime(record.insertedAt)}</td>
+                          <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </>
+        ) : activeTab === 'news' ? (
           <>
             {/* News Collector Status Card */}
             <div className="card status-card">
               <div className="card-header">
                 <h2>News Collector Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
+                <button onClick={refreshCurrentTab} className="btn-icon">
                   <RefreshCw size={20} />
                 </button>
               </div>
@@ -2720,7 +3492,7 @@ function App() {
 
               <div className="actions">
                 <button 
-                  onClick={fetchData} 
+                  onClick={refreshCurrentTab} 
                   className="btn btn-secondary"
                 >
                   <RefreshCw size={18} />
@@ -2759,30 +3531,33 @@ function App() {
                     </div>
                   </div>
                   <div className="stat-item">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div className="stat-label" style={{ color: 'var(--success)' }}>Positive:</div>
-                      <div className="stat-value" style={{ fontSize: '1.25rem' }}>{newsStats.today_positive || 0}</div>
+                    <TrendingUp size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label" style={{ color: 'var(--green)' }}>Positive</div>
+                      <div className="stat-value">{newsStats.today_positive || 0}</div>
                     </div>
                   </div>
                   <div className="stat-item">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div className="stat-label" style={{ color: 'var(--danger)' }}>Negative:</div>
-                      <div className="stat-value" style={{ fontSize: '1.25rem' }}>{newsStats.today_negative || 0}</div>
+                    <TrendingDown size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label" style={{ color: 'var(--red)' }}>Negative</div>
+                      <div className="stat-value">{newsStats.today_negative || 0}</div>
                     </div>
                   </div>
                   <div className="stat-item">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div className="stat-label">Neutral:</div>
-                      <div className="stat-value" style={{ fontSize: '1.25rem' }}>{newsStats.today_neutral || 0}</div>
+                    <Activity size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Neutral</div>
+                      <div className="stat-value">{newsStats.today_neutral || 0}</div>
                     </div>
                   </div>
                 </div>
                 {newsStats.top_keywords && newsStats.top_keywords.length > 0 && (
-                  <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-                    <div className="stat-label" style={{ marginBottom: '0.5rem' }}>Top Keywords Today:</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div className="stats-keywords-section">
+                    <div className="stat-label" style={{ marginBottom: '0.75rem', fontSize: '0.8rem' }}>Top Keywords Today</div>
+                    <div className="keywords-list">
                       {newsStats.top_keywords.map((item, idx) => (
-                        <span key={idx} className="badge" style={{ fontSize: '0.75rem' }}>
+                        <span key={idx} className="badge badge-keyword">
                           {item.keyword} ({item.count})
                         </span>
                       ))}
@@ -2849,170 +3624,9 @@ function App() {
               )}
             </div>
           </>
-        ) : (
-          <>
-            {/* Twitter Collector Status Card */}
-            <div className="card status-card">
-              <div className="card-header">
-                <h2>Twitter Collector Cronjob Status</h2>
-                <button onClick={fetchData} className="btn-icon">
-                  <RefreshCw size={20} />
-                </button>
-              </div>
-
-              <div className="status-grid">
-                <StatusItem
-                  label="Status"
-                  value={twitterStatus?.running ? 'Running' : 'Stopped'}
-                  icon={twitterStatus?.running ? CheckCircle : XCircle}
-                  status={twitterStatus?.running ? 'success' : 'danger'}
-                />
-                <StatusItem
-                  label="Next Run"
-                  value={formatDateTime(twitterStatus?.next_run)}
-                  icon={Clock}
-                />
-                <StatusItem
-                  label="Last Run"
-                  value={formatDateTime(twitterStatus?.last_run)}
-                  icon={Clock}
-                />
-                <StatusItem
-                  label="Last Status"
-                  value={twitterStatus?.last_status ? 
-                    twitterStatus.last_status.charAt(0).toUpperCase() + twitterStatus.last_status.slice(1) : 
-                    'Unknown'}
-                  icon={twitterStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
-                  status={twitterStatus?.last_status === 'success' ? 'success' : 'warning'}
-                />
-              </div>
-
-              <div className="actions">
-                <button 
-                  onClick={fetchData} 
-                  className="btn btn-secondary"
-                >
-                  <RefreshCw size={18} />
-                  Refresh Status
-                </button>
-                <button 
-                  onClick={handleTwitterTrigger} 
-                  className="btn btn-primary"
-                  disabled={twitterTriggering}
-                >
-                  <Play size={18} />
-                  {twitterTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
-              </div>
-            </div>
-
-            {/* Twitter Statistics Card */}
-            {twitterStats && (
-              <div className="card stats-card">
-                <div className="card-header">
-                  <h2>Twitter Statistics</h2>
-                </div>
-                <div className="stats-grid">
-                  <div className="stat-item">
-                    <Database size={24} className="stat-icon" />
-                    <div>
-                      <div className="stat-label">Total Records</div>
-                      <div className="stat-value">{twitterStats.total_records || 0}</div>
-                    </div>
-                  </div>
-                  <div className="stat-item">
-                    <MessageCircle size={24} className="stat-icon" />
-                    <div>
-                      <div className="stat-label">Today's Tweets</div>
-                      <div className="stat-value">{twitterStats.today_count || 0}</div>
-                    </div>
-                  </div>
-                  <div className="stat-item">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div className="stat-label" style={{ color: 'var(--success)' }}>Positive:</div>
-                      <div className="stat-value" style={{ fontSize: '1.25rem' }}>{twitterStats.today_positive || 0}</div>
-                    </div>
-                  </div>
-                  <div className="stat-item">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div className="stat-label" style={{ color: 'var(--danger)' }}>Negative:</div>
-                      <div className="stat-value" style={{ fontSize: '1.25rem' }}>{twitterStats.today_negative || 0}</div>
-                    </div>
-                  </div>
-                  <div className="stat-item">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div className="stat-label">Neutral:</div>
-                      <div className="stat-value" style={{ fontSize: '1.25rem' }}>{twitterStats.today_neutral || 0}</div>
-                    </div>
-                  </div>
-                </div>
-                {twitterStats.top_users && twitterStats.top_users.length > 0 && (
-                  <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-                    <div className="stat-label" style={{ marginBottom: '0.5rem' }}>Top Users Today:</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      {twitterStats.top_users.map((item, idx) => (
-                        <span key={idx} className="badge" style={{ fontSize: '0.75rem' }}>
-                          @{item.username} ({item.count} tweets, {item.avg_followers?.toLocaleString()} avg followers)
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Twitter Data Table Card */}
-            <div className="card data-card">
-              <div className="card-header">
-                <h2>Collected Tweets</h2>
-                <span className="badge">{twitterData.length} records</span>
-              </div>
-
-              {twitterData.length === 0 ? (
-                <div className="empty-state">
-                  <Database size={48} />
-                  <p>No tweet data available</p>
-                </div>
-              ) : (
-                <div className="table-container">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Username</th>
-                        <th>Content</th>
-                        <th>Likes</th>
-                        <th>Retweets</th>
-                        <th>Followers</th>
-                        <th>Sentiment</th>
-                        <th>Tweet Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {twitterData.map((record) => (
-                        <tr key={record._id}>
-                          <td className="date-cell">{record.date || '-'}</td>
-                          <td><strong>@{record.username || '-'}</strong></td>
-                          <td style={{ maxWidth: '400px', wordWrap: 'break-word' }}>{record.content || '-'}</td>
-                          <td>{record.like_count || 0}</td>
-                          <td>{record.retweet_count || 0}</td>
-                          <td>{record.followers_count?.toLocaleString() || 0}</td>
-                          <td className={getSentimentColor(record.sentiment)}>
-                            {record.sentiment === 'Positive' && <TrendingUp size={16} />}
-                            {record.sentiment === 'Negative' && <TrendingDown size={16} />}
-                            {record.sentiment || 'Neutral'}
-                          </td>
-                          <td className="muted">{formatDateTime(record.tweet_date)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+        ) : null}
+        </div>
+      </main>
     </div>
   )
 }
@@ -3030,3 +3644,4 @@ function StatusItem({ label, value, icon: Icon, status }) {
 }
 
 export default App
+

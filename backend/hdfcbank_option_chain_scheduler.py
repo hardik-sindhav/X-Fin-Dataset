@@ -11,13 +11,12 @@ from datetime import datetime, time as dt_time
 import json
 import os
 
-# Configure logging
+# Configure logging - Only show warnings and errors
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.WARNING,
+    format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('hdfcbank_option_chain_scheduler.log', encoding='utf-8'),
-        logging.StreamHandler()
+        logging.StreamHandler()  # Console only - no individual log files
     ]
 )
 logger = logging.getLogger(__name__)
@@ -56,19 +55,12 @@ def run_collector():
         
         # Check if it's market hours before running
         if not is_market_hours(now):
-            logger.info(f"Outside market hours. Current time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
             return
-        
-        logger.info("=" * 60)
-        logger.info(f"HDFC Bank Option Chain Cronjob triggered at {now}")
-        logger.info("=" * 60)
         
         collector = NSEHDFCBankOptionChainCollector()
         success = collector.collect_and_save()
         
-        if success:
-            logger.info("HDFC Bank Option Chain Cronjob completed successfully")
-        else:
+        if not success:
             logger.error("HDFC Bank Option Chain Cronjob completed with errors")
         
         # Update status file
@@ -97,19 +89,18 @@ def run_collector():
     finally:
         if collector:
             collector.close()
-        logger.info("=" * 60)
 
 
 def main():
     """Setup and run the scheduler"""
-    logger.info("Starting NSE HDFC Bank Option Chain Data Collector Scheduler")
-    logger.info(f"Schedule: Monday to Friday from {START_TIME.strftime('%H:%M')} to {END_TIME.strftime('%H:%M')}, every {INTERVAL_MINUTES} minutes")
+    # Starting NSE HDFC Bank Option Chain Data Collector Scheduler
+    # Schedule: Monday to Friday from {START_TIME.strftime('%H:%M')} to {END_TIME.strftime('%H:%M')}, every {INTERVAL_MINUTES} minutes
     
     # Schedule job to run every 3 minutes during weekdays
     # We'll check market hours inside the run_collector function
     schedule.every(INTERVAL_MINUTES).minutes.do(run_collector)
     
-    logger.info("Scheduler configured. Waiting for scheduled times...")
+    # Scheduler configured. Waiting for scheduled times...
     
     # Keep the script running
     try:

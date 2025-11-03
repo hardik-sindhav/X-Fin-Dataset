@@ -8,6 +8,8 @@ from flask_cors import CORS
 from nse_fiidii_collector import NSEDataCollector
 from nse_option_chain_collector import NSEOptionChainCollector
 from nse_banknifty_option_chain_collector import NSEBankNiftyOptionChainCollector
+from nse_finnifty_option_chain_collector import NSEFinniftyOptionChainCollector
+from nse_midcpnifty_option_chain_collector import NSEMidcapNiftyOptionChainCollector
 from nse_hdfcbank_option_chain_collector import NSEHDFCBankOptionChainCollector
 from nse_icicibank_option_chain_collector import NSEICICIBankOptionChainCollector
 from nse_sbin_option_chain_collector import NSESBINOptionChainCollector
@@ -20,8 +22,11 @@ from nse_aubank_option_chain_collector import NSEAUBANKOptionChainCollector
 from nse_indusindbk_option_chain_collector import NSEIndusIndBkOptionChainCollector
 from nse_idfcfirstb_option_chain_collector import NSEIDFCFIRSTBOptionChainCollector
 from nse_federalbnk_option_chain_collector import NSEFEDERALBNKOptionChainCollector
+from nse_gainers_collector import NSEGainersCollector
+from nse_losers_collector import NSELosersCollector
 from nse_news_collector import NSENewsCollector
-from nse_twitter_collector import NSETwitterCollector
+
+# Twitter collector removed - not needed
 import schedule
 import json
 import os
@@ -37,6 +42,8 @@ CORS(app)  # Enable CORS for React frontend
 STATUS_FILE = 'scheduler_status.json'
 OPTION_CHAIN_STATUS_FILE = 'option_chain_scheduler_status.json'
 BANKNIFTY_STATUS_FILE = 'banknifty_option_chain_scheduler_status.json'
+FINNIFTY_STATUS_FILE = 'finnifty_option_chain_scheduler_status.json'
+MIDCPNIFTY_STATUS_FILE = 'midcpnifty_option_chain_scheduler_status.json'
 HDFCBANK_STATUS_FILE = 'hdfcbank_option_chain_scheduler_status.json'
 ICICIBANK_STATUS_FILE = 'icicibank_option_chain_scheduler_status.json'
 SBIN_STATUS_FILE = 'sbin_option_chain_scheduler_status.json'
@@ -49,8 +56,9 @@ AUBANK_STATUS_FILE = 'aubank_option_chain_scheduler_status.json'
 INDUSINDBK_STATUS_FILE = 'indusindbk_option_chain_scheduler_status.json'
 IDFCFIRSTB_STATUS_FILE = 'idfcfirstb_option_chain_scheduler_status.json'
 FEDERALBNK_STATUS_FILE = 'federalbnk_option_chain_scheduler_status.json'
+GAINERS_STATUS_FILE = 'gainers_scheduler_status.json'
+LOSERS_STATUS_FILE = 'losers_scheduler_status.json'
 NEWS_COLLECTOR_STATUS_FILE = 'news_collector_scheduler_status.json'
-TWITTER_COLLECTOR_STATUS_FILE = 'twitter_collector_scheduler_status.json'
 
 
 def get_next_run_time():
@@ -617,6 +625,327 @@ def api_banknifty_trigger():
         return jsonify({
             "success": success,
             "message": "BankNifty option chain data collection completed" if success else "BankNifty option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# Finnifty Option Chain Endpoints
+
+def get_finnifty_option_chain_next_run_time():
+    """Calculate next scheduled run time for Finnifty option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    # Same logic as NIFTY option chain
+    return get_option_chain_next_run_time()
+
+
+def get_finnifty_option_chain_status():
+    """Get Finnifty option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('finnifty_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_finnifty_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(FINNIFTY_STATUS_FILE):
+        try:
+            with open(FINNIFTY_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/finnifty/status')
+def api_finnifty_status():
+    """API endpoint to get Finnifty option chain scheduler status"""
+    status = get_finnifty_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/finnifty/data')
+def api_finnifty_data():
+    """API endpoint to get collected Finnifty option chain data"""
+    try:
+        collector = NSEFinniftyOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/finnifty/stats')
+def api_finnifty_stats():
+    """API endpoint to get Finnifty option chain statistics"""
+    try:
+        collector = NSEFinniftyOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        
+        latest_timestamp = None
+        latest_underlying = None
+        if latest and isinstance(latest.get("records"), dict):
+            latest_timestamp = latest.get("records", {}).get("timestamp")
+            latest_underlying = latest.get("records", {}).get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/finnifty/trigger', methods=['POST'])
+def api_finnifty_trigger():
+    """API endpoint to manually trigger Finnifty option chain data collection"""
+    try:
+        collector = NSEFinniftyOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(FINNIFTY_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "Finnifty option chain data collection completed" if success else "Finnifty option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# MidcapNifty Option Chain Endpoints
+
+def get_midcpnifty_option_chain_next_run_time():
+    """Calculate next scheduled run time for MidcapNifty option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+    # Same logic as NIFTY option chain
+    return get_option_chain_next_run_time()
+
+
+def get_midcpnifty_option_chain_status():
+    """Get MidcapNifty option chain scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('midcpnifty_option_chain_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_midcpnifty_option_chain_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(MIDCPNIFTY_STATUS_FILE):
+        try:
+            with open(MIDCPNIFTY_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/midcpnifty/status')
+def api_midcpnifty_status():
+    """API endpoint to get MidcapNifty option chain scheduler status"""
+    status = get_midcpnifty_option_chain_status()
+    return jsonify(status)
+
+
+@app.route('/api/midcpnifty/data')
+def api_midcpnifty_data():
+    """API endpoint to get collected MidcapNifty option chain data"""
+    try:
+        collector = NSEMidcapNiftyOptionChainCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            records_data = record.get("records", {})
+            if isinstance(records_data, dict):
+                timestamp = records_data.get("timestamp")
+                underlying_value = records_data.get("underlyingValue")
+                data_array = records_data.get("data", [])
+            else:
+                timestamp = None
+                underlying_value = None
+                data_array = []
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp,
+                "underlyingValue": underlying_value,
+                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/midcpnifty/stats')
+def api_midcpnifty_stats():
+    """API endpoint to get MidcapNifty option chain statistics"""
+    try:
+        collector = NSEMidcapNiftyOptionChainCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        
+        latest_timestamp = None
+        latest_underlying = None
+        if latest:
+            records_data = latest.get("records", {})
+            if isinstance(records_data, dict):
+                latest_timestamp = records_data.get("timestamp")
+                latest_underlying = records_data.get("underlyingValue")
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_underlying_value": latest_underlying
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/midcpnifty/trigger', methods=['POST'])
+def api_midcpnifty_trigger():
+    """API endpoint to manually trigger MidcapNifty option chain data collection"""
+    try:
+        collector = NSEMidcapNiftyOptionChainCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(MIDCPNIFTY_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "MidcapNifty option chain data collection completed" if success else "MidcapNifty option chain data collection failed"
         })
     except Exception as e:
         return jsonify({
@@ -3229,6 +3558,454 @@ def api_federalbnk_trigger():
         }), 500
 
 
+# Top 20 Gainers Endpoints
+
+def get_gainers_next_run_time():
+    """Calculate next scheduled run time for gainers (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=days_until_monday)
+        return next_run
+    
+    # If before market hours, return today at 09:15
+    if current_time < start_time:
+        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0)
+        return next_run
+    
+    # If after market hours, return next day at 09:15
+    if current_time > end_time:
+        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=1)
+        # If next day is Saturday, skip to Monday
+        if next_run.weekday() >= 5:
+            days_until_monday = 7 - next_run.weekday()
+            next_run += timedelta(days=days_until_monday)
+        return next_run
+    
+    # During market hours, return next 3-minute interval
+    current_minute = now.minute
+    # Round up to next 3-minute interval
+    next_minute = ((current_minute // 3) + 1) * 3
+    if next_minute >= 60:
+        next_hour = now.hour + 1
+        next_minute = 0
+        # Check if next hour is after market close
+        if next_hour > end_time.hour or (next_hour == end_time.hour and next_minute > end_time.minute):
+            # Return next day at 09:15
+            next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=1)
+            if next_run.weekday() >= 5:
+                days_until_monday = 7 - next_run.weekday()
+                next_run += timedelta(days=days_until_monday)
+            return next_run
+        next_run = now.replace(hour=next_hour, minute=next_minute, second=0, microsecond=0)
+    else:
+        next_run = now.replace(minute=next_minute, second=0, microsecond=0)
+    
+    return next_run
+
+
+def get_gainers_status():
+    """Get gainers scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('gainers_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_gainers_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(GAINERS_STATUS_FILE):
+        try:
+            with open(GAINERS_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/gainers/status')
+def api_gainers_status():
+    """API endpoint to get gainers scheduler status"""
+    status = get_gainers_status()
+    return jsonify(status)
+
+
+@app.route('/api/gainers/data')
+def api_gainers_data():
+    """API endpoint to get collected gainers data"""
+    try:
+        collector = NSEGainersCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            # Get timestamp from record (could be in various places)
+            timestamp = None
+            for key in ['NIFTY', 'BANKNIFTY', 'NIFTYNEXT50', 'allSec', 'FOSec']:
+                if key in record and isinstance(record[key], dict):
+                    section_timestamp = record[key].get('timestamp')
+                    if section_timestamp:
+                        timestamp = section_timestamp
+                        break
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp or record.get("timestamp"),
+                "legends": record.get("legends", []),
+                "nifty_count": len(record.get("NIFTY", {}).get("data", [])) if isinstance(record.get("NIFTY"), dict) else 0,
+                "banknifty_count": len(record.get("BANKNIFTY", {}).get("data", [])) if isinstance(record.get("BANKNIFTY"), dict) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/gainers/stats')
+def api_gainers_stats():
+    """API endpoint to get gainers statistics"""
+    try:
+        collector = NSEGainersCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest = collector.collection.find_one(sort=[("timestamp", -1)])
+        
+        latest_timestamp = None
+        nifty_count = 0
+        banknifty_count = 0
+        if latest:
+            # Get timestamp from latest record
+            for key in ['NIFTY', 'BANKNIFTY', 'NIFTYNEXT50', 'allSec', 'FOSec']:
+                if key in latest and isinstance(latest[key], dict):
+                    section_timestamp = latest[key].get('timestamp')
+                    if section_timestamp:
+                        latest_timestamp = section_timestamp
+                        break
+            
+            if isinstance(latest.get("NIFTY"), dict):
+                nifty_count = len(latest.get("NIFTY", {}).get("data", []))
+            if isinstance(latest.get("BANKNIFTY"), dict):
+                banknifty_count = len(latest.get("BANKNIFTY", {}).get("data", []))
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_nifty_count": nifty_count,
+            "latest_banknifty_count": banknifty_count
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/gainers/trigger', methods=['POST'])
+def api_gainers_trigger():
+    """API endpoint to manually trigger gainers data collection"""
+    try:
+        collector = NSEGainersCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(GAINERS_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "Gainers data collection completed" if success else "Gainers data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# Top 20 Losers Endpoints
+
+def get_losers_next_run_time():
+    """Calculate next scheduled run time for losers (09:15 AM to 03:30 PM, every 3 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(9, 15)  # 09:15 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 09:15
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=days_until_monday)
+        return next_run
+    
+    # If before market hours, return today at 09:15
+    if current_time < start_time:
+        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0)
+        return next_run
+    
+    # If after market hours, return next day at 09:15
+    if current_time > end_time:
+        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=1)
+        # If next day is Saturday, skip to Monday
+        if next_run.weekday() >= 5:
+            days_until_monday = 7 - next_run.weekday()
+            next_run += timedelta(days=days_until_monday)
+        return next_run
+    
+    # During market hours, return next 3-minute interval
+    current_minute = now.minute
+    # Round up to next 3-minute interval
+    next_minute = ((current_minute // 3) + 1) * 3
+    if next_minute >= 60:
+        next_hour = now.hour + 1
+        next_minute = 0
+        # Check if next hour is after market close
+        if next_hour > end_time.hour or (next_hour == end_time.hour and next_minute > end_time.minute):
+            # Return next day at 09:15
+            next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=1)
+            if next_run.weekday() >= 5:
+                days_until_monday = 7 - next_run.weekday()
+                next_run += timedelta(days=days_until_monday)
+            return next_run
+        next_run = now.replace(hour=next_hour, minute=next_minute, second=0, microsecond=0)
+    else:
+        next_run = now.replace(minute=next_minute, second=0, microsecond=0)
+    
+    return next_run
+
+
+def get_losers_status():
+    """Get losers scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('losers_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_losers_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(LOSERS_STATUS_FILE):
+        try:
+            with open(LOSERS_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/losers/status')
+def api_losers_status():
+    """API endpoint to get losers scheduler status"""
+    status = get_losers_status()
+    return jsonify(status)
+
+
+@app.route('/api/losers/data')
+def api_losers_data():
+    """API endpoint to get collected losers data"""
+    try:
+        collector = NSELosersCollector()
+        
+        # Get all records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("timestamp", -1).limit(100))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            # Get timestamp from record (could be in various places)
+            timestamp = None
+            for key in ['NIFTY', 'BANKNIFTY', 'NIFTYNEXT50', 'allSec', 'FOSec']:
+                if key in record and isinstance(record[key], dict):
+                    section_timestamp = record[key].get('timestamp')
+                    if section_timestamp:
+                        timestamp = section_timestamp
+                        break
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": timestamp or record.get("timestamp"),
+                "legends": record.get("legends", []),
+                "nifty_count": len(record.get("NIFTY", {}).get("data", [])) if isinstance(record.get("NIFTY"), dict) else 0,
+                "banknifty_count": len(record.get("BANKNIFTY", {}).get("data", [])) if isinstance(record.get("BANKNIFTY"), dict) else 0,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/losers/stats')
+def api_losers_stats():
+    """API endpoint to get losers statistics"""
+    try:
+        collector = NSELosersCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get latest record
+        latest = collector.collection.find_one(sort=[("timestamp", -1)])
+        
+        latest_timestamp = None
+        nifty_count = 0
+        banknifty_count = 0
+        if latest:
+            # Get timestamp from latest record
+            for key in ['NIFTY', 'BANKNIFTY', 'NIFTYNEXT50', 'allSec', 'FOSec']:
+                if key in latest and isinstance(latest[key], dict):
+                    section_timestamp = latest[key].get('timestamp')
+                    if section_timestamp:
+                        latest_timestamp = section_timestamp
+                        break
+            
+            if isinstance(latest.get("NIFTY"), dict):
+                nifty_count = len(latest.get("NIFTY", {}).get("data", []))
+            if isinstance(latest.get("BANKNIFTY"), dict):
+                banknifty_count = len(latest.get("BANKNIFTY", {}).get("data", []))
+        
+        stats = {
+            "total_records": total_count,
+            "latest_timestamp": latest_timestamp,
+            "latest_nifty_count": nifty_count,
+            "latest_banknifty_count": banknifty_count
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/losers/trigger', methods=['POST'])
+def api_losers_trigger():
+    """API endpoint to manually trigger losers data collection"""
+    try:
+        collector = NSELosersCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(LOSERS_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "Losers data collection completed" if success else "Losers data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # News Collector Endpoints
 
 def get_news_collector_next_run_time():
@@ -3457,235 +4234,103 @@ def api_news_trigger():
         }), 500
 
 
-def get_twitter_collector_next_run_time():
-    """Calculate next scheduled run time for Twitter collector (09:00 AM to 03:30 PM, every 15 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 0)   # 09:00 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:00
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:00
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:00
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:00 to 03:30)
-    # Calculate next 15-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 15) + 1) * 15
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:00
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:00
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+# Twitter collector endpoints removed - not needed
 
 
-def get_twitter_collector_status():
-    """Get Twitter collector scheduler status from file or calculate"""
-    status = {
-        "running": False,
-        "pid": None,
-        "next_run": None,
-        "last_run": None,
-        "last_status": "unknown"
-    }
+def start_all_schedulers_in_background():
+    """Start all schedulers in background threads"""
+    import logging
     
-    # Check if process is running
-    is_running, pid = check_scheduler_running('twitter_collector_scheduler.py')
-    status["running"] = is_running
-    status["pid"] = pid
-    
-    # Get next run time
-    try:
-        next_run = get_twitter_collector_next_run_time()
-        status["next_run"] = next_run.isoformat() if next_run else None
-    except Exception as e:
-        status["next_run"] = None
-    
-    # Try to read status file
-    if os.path.exists(TWITTER_COLLECTOR_STATUS_FILE):
-        try:
-            with open(TWITTER_COLLECTOR_STATUS_FILE, 'r') as f:
-                file_status = json.load(f)
-                status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
-        except Exception as e:
-            pass
-    
-    # If scheduler is not running and we have no last run info, set default message
-    if not status["running"] and not status["last_run"]:
-        status["last_status"] = "not_started"
-    
-    return status
-
-
-@app.route('/api/twitter/status')
-def api_twitter_status():
-    """API endpoint to get Twitter collector scheduler status"""
-    status = get_twitter_collector_status()
-    return jsonify(status)
-
-
-@app.route('/api/twitter/data')
-def api_twitter_data():
-    """API endpoint to get collected Twitter data"""
-    try:
-        collector = NSETwitterCollector()
-        
-        # Get all records sorted by tweet_date (newest first)
-        records = list(collector.collection.find().sort("tweet_date", -1).limit(100))
-        
-        # Convert ObjectId to string and format dates
-        data = []
-        for record in records:
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "date": record.get("date"),
-                "tweet_id": record.get("tweet_id"),
-                "username": record.get("username"),
-                "followers_count": record.get("followers_count", 0),
-                "content": record.get("content"),
-                "retweet_count": record.get("retweet_count", 0),
-                "like_count": record.get("like_count", 0),
-                "sentiment": record.get("sentiment"),
-                "tweet_date": record.get("tweet_date").isoformat() if record.get("tweet_date") else None,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None
-            }
-            data.append(record_dict)
-        
-        collector.close()
-        
-        return jsonify({
-            "success": True,
-            "count": len(data),
-            "data": data
-        })
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-
-@app.route('/api/twitter/stats')
-def api_twitter_stats():
-    """API endpoint to get Twitter statistics"""
-    try:
-        collector = NSETwitterCollector()
-        
-        total_count = collector.collection.count_documents({})
-        
-        # Get today's date
-        import pytz
-        ist = pytz.timezone("Asia/Kolkata")
-        today = datetime.now(ist).date().isoformat()
-        
-        # Count by sentiment
-        positive_count = collector.collection.count_documents({"sentiment": "Positive", "date": today})
-        negative_count = collector.collection.count_documents({"sentiment": "Negative", "date": today})
-        neutral_count = collector.collection.count_documents({"sentiment": "Neutral", "date": today})
-        
-        # Count by top users
-        user_pipeline = [
-            {"$match": {"date": today}},
-            {"$group": {"_id": "$username", "count": {"$sum": 1}, "avg_followers": {"$avg": "$followers_count"}}},
-            {"$sort": {"count": -1}},
-            {"$limit": 5}
+    # Configure logging for schedulers - Only show warnings and errors
+    logging.basicConfig(
+        level=logging.WARNING,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler()  # Console only - no log files
         ]
-        top_users = list(collector.collection.aggregate(user_pipeline))
+    )
+    logger = logging.getLogger(__name__)
+    
+    # ADMIN PANEL: Starting All Data Collectors in Background
+    # Started at: {datetime.now()}
+    
+    # List of all schedulers
+    schedulers = [
+        ('cronjob_scheduler', 'FII/DII Data Collector'),
+        ('option_chain_scheduler', 'NIFTY Option Chain Collector'),
+        ('banknifty_option_chain_scheduler', 'BankNifty Option Chain Collector'),
+        ('finnifty_option_chain_scheduler', 'Finnifty Option Chain Collector'),
+        ('midcpnifty_option_chain_scheduler', 'MidcapNifty Option Chain Collector'),
+        ('hdfcbank_option_chain_scheduler', 'HDFC Bank Option Chain Collector'),
+        ('icicibank_option_chain_scheduler', 'ICICI Bank Option Chain Collector'),
+        ('sbin_option_chain_scheduler', 'SBIN Option Chain Collector'),
+        ('kotakbank_option_chain_scheduler', 'Kotak Bank Option Chain Collector'),
+        ('axisbank_option_chain_scheduler', 'Axis Bank Option Chain Collector'),
+        ('bankbaroda_option_chain_scheduler', 'Bank of Baroda Option Chain Collector'),
+        ('pnb_option_chain_scheduler', 'PNB Option Chain Collector'),
+        ('canbk_option_chain_scheduler', 'CANBK Option Chain Collector'),
+        ('aubank_option_chain_scheduler', 'AUBANK Option Chain Collector'),
+        ('indusindbk_option_chain_scheduler', 'IndusInd Bank Option Chain Collector'),
+        ('idfcfirstb_option_chain_scheduler', 'IDFC First Bank Option Chain Collector'),
+        ('federalbnk_option_chain_scheduler', 'Federal Bank Option Chain Collector'),
+        ('gainers_scheduler', 'Top 20 Gainers Collector'),
+        ('losers_scheduler', 'Top 20 Losers Collector'),
+        ('news_collector_scheduler', 'News Collector'),
+    ]
+    
+    def run_scheduler_in_thread(module_name, scheduler_name):
+        """Run scheduler in a separate thread"""
+        def scheduler_worker():
+            try:
+                # Import the scheduler module
+                scheduler_module = __import__(module_name, fromlist=[])
+                
+                # Check if module has a main function (most schedulers have this)
+                if hasattr(scheduler_module, 'main'):
+                    scheduler_module.main()
+                else:
+                    logger.error(f"{scheduler_name} does not have a main() function")
+                
+            except ImportError as e:
+                logger.error(f"Failed to import {module_name}: {str(e)}")
+            except Exception as e:
+                logger.error(f"Error in {scheduler_name} thread: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
         
-        stats = {
-            "total_records": total_count,
-            "today_count": collector.collection.count_documents({"date": today}),
-            "today_positive": positive_count,
-            "today_negative": negative_count,
-            "today_neutral": neutral_count,
-            "top_users": [{"username": item["_id"], "count": item["count"], "avg_followers": int(item.get("avg_followers", 0))} for item in top_users]
-        }
-        
-        collector.close()
-        
-        return jsonify({
-            "success": True,
-            "stats": stats
-        })
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
-
-
-@app.route('/api/twitter/trigger', methods=['POST'])
-def api_twitter_trigger():
-    """API endpoint to manually trigger Twitter collection"""
-    try:
-        collector = NSETwitterCollector()
-        success = collector.collect_and_save()
-        collector.close()
-        
-        # Update status file
-        status_data = {
-            "last_run": datetime.now().isoformat(),
-            "last_status": "success" if success else "failed",
-            "manual_trigger": True
-        }
-        with open(TWITTER_COLLECTOR_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
-        
-        return jsonify({
-            "success": success,
-            "message": "Twitter collection completed" if success else "Twitter collection failed"
-        })
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        thread = threading.Thread(target=scheduler_worker, daemon=True, name=scheduler_name)
+        thread.start()
+        return thread
+    
+    threads = []
+    
+    # Start each scheduler in a separate thread
+    for module_name, scheduler_name in schedulers:
+        thread = run_scheduler_in_thread(module_name, scheduler_name)
+        threads.append((thread, scheduler_name))
+        time_module.sleep(0.5)  # Small delay between starting schedulers
+    
+    # All {len(threads)} schedulers started successfully in background!
+    
+    return threads
 
 
 if __name__ == '__main__':
+    print("=" * 80)
     print("Starting Admin Panel...")
+    print("=" * 80)
+    print("Starting all data collectors automatically...")
+    
+    # Start all schedulers in background threads
+    scheduler_threads = start_all_schedulers_in_background()
+    
+    print(f"✓ All {len(scheduler_threads)} schedulers started in background")
+    print("=" * 80)
     print("Access the panel at: http://localhost:5000")
+    print("=" * 80)
+    print("Press Ctrl+C to stop both admin panel and schedulers")
+    print("=" * 80)
+    
+    # Run Flask app
     app.run(debug=True, host='0.0.0.0', port=5000)
 

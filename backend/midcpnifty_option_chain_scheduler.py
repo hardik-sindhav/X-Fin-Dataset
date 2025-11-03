@@ -1,12 +1,12 @@
 """
-Cronjob Scheduler for NSE Twitter Collector
-Runs Monday to Friday from 09:00 AM to 03:30 PM, every 15 minutes
+Cronjob Scheduler for NSE MidcapNifty Option Chain Data Collector
+Runs Monday to Friday from 09:15 AM to 03:30 PM, every 3 minutes
 """
 
 import schedule
 import time
 import logging
-from nse_twitter_collector import NSETwitterCollector
+from nse_midcpnifty_option_chain_collector import NSEMidcapNiftyOptionChainCollector
 from datetime import datetime, time as dt_time
 import json
 import os
@@ -16,23 +16,23 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('twitter_collector_scheduler.log', encoding='utf-8'),
+        logging.FileHandler('midcpnifty_option_chain_scheduler.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
 # Configuration
-START_TIME = dt_time(9, 0)   # 09:00 AM
-END_TIME = dt_time(15, 30)  # 03:30 PM (15:30)
-INTERVAL_MINUTES = 15
+START_TIME = dt_time(9, 15)  # 09:15 AM
+END_TIME = dt_time(15, 30)   # 03:30 PM (15:30)
+INTERVAL_MINUTES = 3
 
-STATUS_FILE = 'twitter_collector_scheduler_status.json'
+STATUS_FILE = 'midcpnifty_option_chain_scheduler_status.json'
 
 
 def is_market_hours(now: datetime) -> bool:
     """
-    Check if current time is within market hours (09:00 AM to 03:30 PM)
+    Check if current time is within market hours (09:15 AM to 03:30 PM)
     and if it's a weekday (Monday-Friday)
     """
     # Check if weekday (Monday=0 to Friday=4)
@@ -41,7 +41,7 @@ def is_market_hours(now: datetime) -> bool:
     
     current_time = now.time()
     
-    # Check if time is between 09:00 and 15:30
+    # Check if time is between 09:15 and 15:30
     if current_time < START_TIME or current_time > END_TIME:
         return False
     
@@ -49,7 +49,7 @@ def is_market_hours(now: datetime) -> bool:
 
 
 def run_collector():
-    """Execute the NSE Twitter collector"""
+    """Execute the NSE MidcapNifty option chain data collector"""
     collector = None
     try:
         now = datetime.now()
@@ -60,16 +60,16 @@ def run_collector():
             return
         
         logger.info("=" * 60)
-        logger.info(f"Twitter Collector Cronjob triggered at {now}")
+        logger.info(f"MidcapNifty Option Chain Cronjob triggered at {now}")
         logger.info("=" * 60)
         
-        collector = NSETwitterCollector()
+        collector = NSEMidcapNiftyOptionChainCollector()
         success = collector.collect_and_save()
         
         if success:
-            logger.info("Twitter Collector Cronjob completed successfully")
+            logger.info("MidcapNifty Option Chain Cronjob completed successfully")
         else:
-            logger.error("Twitter Collector Cronjob completed with errors")
+            logger.error("MidcapNifty Option Chain Cronjob completed with errors")
         
         # Update status file
         status_data = {
@@ -83,7 +83,7 @@ def run_collector():
             logger.warning(f"Failed to update status file: {str(e)}")
             
     except Exception as e:
-        logger.error(f"Twitter Collector Cronjob failed with error: {str(e)}")
+        logger.error(f"MidcapNifty Option Chain Cronjob failed with error: {str(e)}")
         # Update status file with error
         status_data = {
             "last_run": datetime.now().isoformat(),
@@ -102,10 +102,10 @@ def run_collector():
 
 def main():
     """Setup and run the scheduler"""
-    logger.info("Starting NSE Twitter Collector Scheduler")
+    logger.info("Starting NSE MidcapNifty Option Chain Data Collector Scheduler")
     logger.info(f"Schedule: Monday to Friday from {START_TIME.strftime('%H:%M')} to {END_TIME.strftime('%H:%M')}, every {INTERVAL_MINUTES} minutes")
     
-    # Schedule job to run every 15 minutes during weekdays
+    # Schedule job to run every 3 minutes during weekdays
     # We'll check market hours inside the run_collector function
     schedule.every(INTERVAL_MINUTES).minutes.do(run_collector)
     
@@ -121,6 +121,7 @@ def main():
         logger.info("Scheduler stopped by user")
     except Exception as e:
         logger.error(f"Scheduler error: {str(e)}")
+        raise
 
 
 if __name__ == "__main__":

@@ -8,6 +8,4 @@ psutil==5.9.6
 feedparser==6.0.10
 textblob==0.17.1
 pytz==2024.1
-snscrape==0.3.0
-pandas==2.0.3
 

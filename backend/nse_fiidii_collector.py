@@ -17,13 +17,12 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Configure logging - Only show warnings and errors
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.WARNING,
+    format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('nse_collector.log', encoding='utf-8'),
-        logging.StreamHandler()
+        logging.StreamHandler()  # Console only - no individual log files
     ]
 )
 logger = logging.getLogger(__name__)
@@ -69,7 +68,7 @@ class NSEDataCollector:
             # Create unique index on date to prevent duplicates (one document per date)
             self.collection.create_index([("date", 1)], unique=True)
             
-            logger.info(f"Successfully connected to MongoDB at {MONGO_HOST}:{MONGO_PORT}")
+            # Only log connection errors, not successful connections
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {str(e)}")
             raise
@@ -88,7 +87,9 @@ class NSEDataCollector:
         
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                logger.info(f"Attempting to fetch data from NSE API (Attempt {attempt}/{MAX_RETRIES})")
+                # Only log on errors or final attempt
+                if attempt == MAX_RETRIES:
+                    logger.warning(f"Final attempt to fetch data from NSE API")
                 
                 response = requests.get(NSE_API_URL, headers=headers, timeout=30)
                 response.raise_for_status()
@@ -98,29 +99,21 @@ class NSEDataCollector:
                 if not isinstance(data, list):
                     logger.error(f"Unexpected data format: {type(data)}")
                     if attempt < MAX_RETRIES:
-                        logger.info(f"Retrying in {RETRY_DELAY} seconds...")
                         time.sleep(RETRY_DELAY)
                         continue
                     return None
                 
-                logger.info(f"Successfully fetched {len(data)} records from NSE API")
                 return data
                 
             except requests.exceptions.RequestException as e:
-                logger.error(f"Request failed (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
-                if attempt < MAX_RETRIES:
-                    logger.info(f"Retrying in {RETRY_DELAY} seconds...")
-                    time.sleep(RETRY_DELAY)
-                else:
-                    logger.error("All retry attempts failed")
+                if attempt == MAX_RETRIES:
+                    logger.error(f"Request failed after {MAX_RETRIES} attempts: {str(e)}")
+                time.sleep(RETRY_DELAY)
                     
             except Exception as e:
-                logger.error(f"Unexpected error (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
-                if attempt < MAX_RETRIES:
-                    logger.info(f"Retrying in {RETRY_DELAY} seconds...")
-                    time.sleep(RETRY_DELAY)
-                else:
-                    logger.error("All retry attempts failed")
+                if attempt == MAX_RETRIES:
+                    logger.error(f"Unexpected error after {MAX_RETRIES} attempts: {str(e)}")
+                time.sleep(RETRY_DELAY)
         
         return None
     
@@ -208,7 +201,7 @@ class NSEDataCollector:
                 except Exception as e:
                     logger.error(f"Error saving record for date {date}: {str(e)}")
             
-            logger.info(f"Data save completed: {success_count} inserted, {updated_count} updated")
+            # Data save completed silently
             return success_count > 0 or updated_count > 0
             
         except Exception as e:
@@ -221,7 +214,7 @@ class NSEDataCollector:
         Returns: True if successful, False otherwise
         """
         try:
-            logger.info("Starting NSE data collection...")
+            # Starting NSE data collection
             
             # Fetch data with retry
             data = self._fetch_data_with_retry()
@@ -233,9 +226,7 @@ class NSEDataCollector:
             # Save to MongoDB
             success = self._save_to_mongo(data)
             
-            if success:
-                logger.info("NSE data collection completed successfully")
-            else:
+            if not success:
                 logger.error("Failed to save data to MongoDB")
             
             return success
@@ -248,7 +239,7 @@ class NSEDataCollector:
         """Close MongoDB connection"""
         if self.client:
             self.client.close()
-            logger.info("MongoDB connection closed")
+            # MongoDB connection closed
 
 
 def main():
