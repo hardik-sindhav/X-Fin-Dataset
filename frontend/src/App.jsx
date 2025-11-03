@@ -15,13 +15,16 @@ import {
   Newspaper,
   MessageCircle,
   Menu,
-  X
+  X,
+  Home
 } from 'lucide-react'
+import HomePage from './components/HomePage'
 import './App.css'
 
 const API_BASE = '/api'
 
 function App() {
+  const [showHome, setShowHome] = useState(true) // Start with home page
   const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'gainers', 'losers', or 'news'
   
   // FII/DII state
@@ -774,6 +777,34 @@ function App() {
     return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
+  // Handle navigation from home page
+  const handleHomeNavigation = (tabName) => {
+    setShowHome(false)
+    setActiveTab(tabName)
+    fetchTabData(tabName)
+  }
+
+  // Show home page
+  if (showHome) {
+    return (
+      <div className="app">
+        <header className="header">
+          <div className="header-content">
+            <div className="header-brand">
+              <div className="brand-logo">
+                <Activity size={24} />
+              </div>
+              <h1>X Fin Ai</h1>
+            </div>
+          </div>
+        </header>
+        <main className="main-content home-main">
+          <HomePage onNavigate={handleHomeNavigation} />
+        </main>
+      </div>
+    )
+  }
+
   if (loadingTab) {
     return (
       <div className="loading-container">
@@ -791,6 +822,13 @@ function App() {
             <button className="menu-toggle" onClick={toggleSidebar}>
               <Menu size={24} />
             </button>
+            <button 
+              className="home-btn"
+              onClick={() => setShowHome(true)}
+              title="Go to Home"
+            >
+              <Home size={20} />
+            </button>
             <div className="brand-logo">
               <Activity size={24} />
             </div>
@@ -805,10 +843,25 @@ function App() {
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
-          <h2>Menu</h2>
+          <h2>Navigation</h2>
           <button className="sidebar-close" onClick={() => setSidebarOpen(false)}>
-            <X size={24} />
+            <X size={20} />
           </button>
+        </div>
+        <div className="sidebar-section">
+          <div className="sidebar-section-title">Main Menu</div>
+          <ul className="sidebar-menu">
+            <li 
+              className="sidebar-item"
+              onClick={() => {
+                setShowHome(true)
+                setSidebarOpen(false)
+              }}
+            >
+              <Home size={20} />
+              Home
+            </li>
+          </ul>
         </div>
         <div className="sidebar-section">
           <div className="sidebar-section-title">Market Data</div>
