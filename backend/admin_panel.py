@@ -35,9 +35,22 @@ import threading
 import time as time_module
 import psutil
 import sys
+import jwt
+from functools import wraps
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
+
+# JWT Configuration
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+JWT_ALGORITHM = 'HS256'
+JWT_EXPIRATION_HOURS = 24
+
+# Default admin credentials (should be changed and stored securely in production)
+# For production, use environment variables
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
+ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH', generate_password_hash('admin123'))
 
 STATUS_FILE = 'scheduler_status.json'
 OPTION_CHAIN_STATUS_FILE = 'option_chain_scheduler_status.json'
@@ -111,6 +124,18 @@ def check_scheduler_running(scheduler_file='cronjob_scheduler.py'):
         return False, None
 
 
+def get_pagination_params():
+    """Get and validate pagination parameters from request"""
+    page = request.args.get('page', default=1, type=int)
+    limit = request.args.get('limit', default=15, type=int)
+    
+    # Ensure valid pagination values
+    page = max(1, page)
+    limit = max(1, min(100, limit))  # Limit between 1 and 100
+    
+    return page, limit
+
+
 def get_scheduler_status():
     """Get scheduler status from file or calculate"""
     status = {
@@ -151,9 +176,91 @@ def get_scheduler_status():
     return status
 
 
+def token_required(f):
+    """Decorator to protect routes with JWT token"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        
+        # Get token from Authorization header
+        if 'Authorization' in request.headers:
+            auth_header = request.headers['Authorization']
+            try:
+                token = auth_header.split(' ')[1]  # Format: "Bearer <token>"
+            except IndexError:
+                return jsonify({'success': False, 'error': 'Invalid token format'}), 401
+        
+        if not token:
+            return jsonify({'success': False, 'error': 'Token is missing'}), 401
+        
+        try:
+            # Decode and verify token
+            data = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            # You can add user info here if needed
+        except jwt.ExpiredSignatureError:
+            return jsonify({'success': False, 'error': 'Token has expired'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'success': False, 'error': 'Invalid token'}), 401
+        
+        return f(*args, **kwargs)
+    
+    return decorated
+
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    """API endpoint for user login - returns JWT token"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({
+                'success': False,
+                'error': 'Username and password are required'
+            }), 400
+        
+        # Verify credentials
+        if username == ADMIN_USERNAME and check_password_hash(ADMIN_PASSWORD_HASH, password):
+            # Generate JWT token
+            token_payload = {
+                'username': username,
+                'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+            }
+            token = jwt.encode(token_payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+            
+            return jsonify({
+                'success': True,
+                'token': token,
+                'username': username,
+                'expires_in': JWT_EXPIRATION_HOURS * 3600  # seconds
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid username or password'
+            }), 401
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/verify-token', methods=['GET'])
+@token_required
+def api_verify_token():
+    """API endpoint to verify if token is valid"""
+    return jsonify({
+        'success': True,
+        'message': 'Token is valid'
+    }), 200
 
 
 @app.route('/api/status')
+@token_required
 def api_status():
     """API endpoint to get scheduler status"""
     status = get_scheduler_status()
@@ -161,13 +268,23 @@ def api_status():
 
 
 @app.route('/api/data')
+@token_required
 def api_data():
-    """API endpoint to get collected data"""
+    """API endpoint to get collected data with pagination"""
     try:
         collector = NSEDataCollector()
         
-        # Get all records sorted by date (newest first)
-        records = list(collector.collection.find().sort("date", -1))
+        # Get pagination parameters
+        page, limit = get_pagination_params()
+        
+        # Calculate skip
+        skip = (page - 1) * limit
+        
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by date (newest first)
+        records = list(collector.collection.find().sort("date", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -184,9 +301,18 @@ def api_data():
         
         collector.close()
         
+        # Calculate pagination info
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -197,6 +323,7 @@ def api_data():
 
 
 @app.route('/api/stats')
+@token_required
 def api_stats():
     """API endpoint to get statistics"""
     try:
@@ -228,6 +355,7 @@ def api_stats():
 
 
 @app.route('/api/trigger', methods=['POST'])
+@token_required
 def api_trigger():
     """API endpoint to manually trigger FII/DII data collection"""
     try:
@@ -379,12 +507,21 @@ def api_option_chain_status():
 
 @app.route('/api/option-chain/data')
 def api_option_chain_data():
-    """API endpoint to get collected option chain data"""
+    """API endpoint to get collected option chain data with pagination"""
     try:
         collector = NSEOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get pagination parameters
+        page, limit = get_pagination_params()
+        
+        # Calculate skip
+        skip = (page - 1) * limit
+        
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -402,9 +539,18 @@ def api_option_chain_data():
         
         collector.close()
         
+        # Calculate pagination info
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -534,12 +680,21 @@ def api_banknifty_status():
 
 @app.route('/api/banknifty/data')
 def api_banknifty_data():
-    """API endpoint to get collected BankNifty option chain data"""
+    """API endpoint to get collected BankNifty option chain data with pagination"""
     try:
         collector = NSEBankNiftyOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get pagination parameters
+        page, limit = get_pagination_params()
+        
+        # Calculate skip
+        skip = (page - 1) * limit
+        
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -557,9 +712,18 @@ def api_banknifty_data():
         
         collector.close()
         
+        # Calculate pagination info
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -689,12 +853,21 @@ def api_finnifty_status():
 
 @app.route('/api/finnifty/data')
 def api_finnifty_data():
-    """API endpoint to get collected Finnifty option chain data"""
+    """API endpoint to get collected Finnifty option chain data with pagination"""
     try:
         collector = NSEFinniftyOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get pagination parameters
+        page, limit = get_pagination_params()
+        
+        # Calculate skip
+        skip = (page - 1) * limit
+        
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -712,9 +885,18 @@ def api_finnifty_data():
         
         collector.close()
         
+        # Calculate pagination info
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:

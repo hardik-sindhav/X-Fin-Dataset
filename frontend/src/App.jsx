@@ -16,15 +16,24 @@ import {
   MessageCircle,
   Menu,
   X,
-  Home
+  Home,
+  ChevronLeft,
+  ChevronRight,
+  LogOut
 } from 'lucide-react'
 import HomePage from './components/HomePage'
+import Login from './components/Login'
 import './App.css'
 
 const API_BASE = '/api'
 
 function App() {
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authToken, setAuthToken] = useState(null)
+  const [username, setUsername] = useState('')
   const [showHome, setShowHome] = useState(true) // Start with home page
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'gainers', 'losers', or 'news'
   
   // FII/DII state
@@ -131,6 +140,10 @@ function App() {
   const [loadingTab, setLoadingTab] = useState(null)
   const [loadedTabs, setLoadedTabs] = useState(new Set())
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  
+  // Pagination state for each tab
+  const [pagination, setPagination] = useState({})
+  const RECORDS_PER_PAGE = 15
   const [triggering, setTriggering] = useState(false)
   const [optionChainTriggering, setOptionChainTriggering] = useState(false)
   const [bankniftyTriggering, setBankniftyTriggering] = useState(false)
@@ -153,47 +166,75 @@ function App() {
   const [newsTriggering, setNewsTriggering] = useState(false)
 
   // Fetch data for a specific tab only if not already loaded
-  const fetchTabData = async (tabName, forceRefresh = false) => {
-    // Skip if already loaded and not forcing refresh
-    if (!forceRefresh && loadedTabs.has(tabName)) {
-      return
-    }
-
+  const fetchTabData = async (tabName, forceRefresh = false, page = 1) => {
     setLoadingTab(tabName)
 
     try {
+      const limit = RECORDS_PER_PAGE
+      
       switch (tabName) {
         case 'fiidii':
           const [statusRes, dataRes, statsRes] = await Promise.all([
             axios.get(`${API_BASE}/status`),
-            axios.get(`${API_BASE}/data`),
+            axios.get(`${API_BASE}/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/stats`)
           ])
           setStatus(statusRes.data)
           setData(dataRes.data.data || [])
           setStats(statsRes.data.stats)
+          // Update pagination state
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: dataRes.data.page || page,
+              total: dataRes.data.total || 0,
+              total_pages: dataRes.data.total_pages || 1,
+              has_next: dataRes.data.has_next || false,
+              has_prev: dataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'option-chain':
           const [optStatusRes, optDataRes, optStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/option-chain/status`),
-            axios.get(`${API_BASE}/option-chain/data`),
+            axios.get(`${API_BASE}/option-chain/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/option-chain/stats`)
           ])
           setOptionChainStatus(optStatusRes.data)
           setOptionChainData(optDataRes.data.data || [])
           setOptionChainStats(optStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: optDataRes.data.page || page,
+              total: optDataRes.data.total || 0,
+              total_pages: optDataRes.data.total_pages || 1,
+              has_next: optDataRes.data.has_next || false,
+              has_prev: optDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'banknifty':
           const [bnStatusRes, bnDataRes, bnStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/banknifty/status`),
-            axios.get(`${API_BASE}/banknifty/data`),
+            axios.get(`${API_BASE}/banknifty/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/banknifty/stats`)
           ])
           setBankniftyStatus(bnStatusRes.data)
           setBankniftyData(bnDataRes.data.data || [])
           setBankniftyStats(bnStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: bnDataRes.data.page || page,
+              total: bnDataRes.data.total || 0,
+              total_pages: bnDataRes.data.total_pages || 1,
+              has_next: bnDataRes.data.has_next || false,
+              has_prev: bnDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'finnifty':
@@ -391,9 +432,136 @@ function App() {
       setLoadedTabs(prev => new Set([...prev, tabName]))
     } catch (error) {
       console.error(`Error fetching data for ${tabName}:`, error)
+      
+      // If unauthorized (401), redirect to login
+      if (error.response && error.response.status === 401) {
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('username')
+        setIsAuthenticated(false)
+        setAuthToken(null)
+        setShowHome(true)
+        delete axios.defaults.headers.common['Authorization']
+      }
     } finally {
       setLoadingTab(null)
     }
+  }
+
+  // Pagination component
+  const Pagination = ({ tabName }) => {
+    const paginationData = pagination[tabName]
+    if (!paginationData || paginationData.total_pages <= 1) return null
+
+    const handlePageChange = (newPage) => {
+      if (newPage >= 1 && newPage <= paginationData.total_pages) {
+        fetchTabData(tabName, true, newPage)
+      }
+    }
+
+    return (
+      <div className="pagination">
+        <button
+          className="pagination-btn"
+          onClick={() => handlePageChange(paginationData.page - 1)}
+          disabled={!paginationData.has_prev}
+        >
+          <ChevronLeft size={18} />
+          Previous
+        </button>
+        <div className="pagination-info">
+          Page {paginationData.page} of {paginationData.total_pages}
+          <span className="pagination-total">({paginationData.total} total records)</span>
+        </div>
+        <button
+          className="pagination-btn"
+          onClick={() => handlePageChange(paginationData.page + 1)}
+          disabled={!paginationData.has_next}
+        >
+          Next
+          <ChevronRight size={18} />
+        </button>
+      </div>
+    )
+  }
+
+  // Check authentication on mount
+  useEffect(() => {
+    const token = localStorage.getItem('authToken')
+    const storedUsername = localStorage.getItem('username')
+    
+    if (token) {
+      // Verify token is still valid
+      verifyToken(token, storedUsername)
+    }
+  }, [])
+
+  // Configure axios to include token in all requests
+  useEffect(() => {
+    if (authToken) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${authToken}`
+    } else {
+      delete axios.defaults.headers.common['Authorization']
+    }
+  }, [authToken])
+
+  // Verify token validity
+  const verifyToken = async (token, storedUsername) => {
+    try {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+      const response = await axios.get(`${API_BASE}/verify-token`)
+      
+      if (response.data.success) {
+        setIsAuthenticated(true)
+        setAuthToken(token)
+        setUsername(storedUsername || 'Admin')
+      } else {
+        // Token invalid, clear storage
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('username')
+        setIsAuthenticated(false)
+        setAuthToken(null)
+      }
+    } catch (error) {
+      // Token invalid or expired
+      localStorage.removeItem('authToken')
+      localStorage.removeItem('username')
+      setIsAuthenticated(false)
+      setAuthToken(null)
+      delete axios.defaults.headers.common['Authorization']
+    }
+  }
+
+  // Handle successful login
+  const handleLoginSuccess = (token, user) => {
+    setAuthToken(token)
+    setUsername(user)
+    setIsAuthenticated(true)
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+    // After login, if user was trying to access a specific tab, navigate to it
+    if (activeTab && !showHome) {
+      fetchTabData(activeTab)
+    }
+  }
+
+  // Handle logout click - show confirmation dialog
+  const handleLogoutClick = () => {
+    setShowLogoutDialog(true)
+  }
+
+  // Handle logout confirmation
+  const handleLogout = () => {
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('username')
+    setIsAuthenticated(false)
+    setAuthToken(null)
+    setShowHome(true)
+    setShowLogoutDialog(false)
+    delete axios.defaults.headers.common['Authorization']
+  }
+
+  // Cancel logout
+  const handleCancelLogout = () => {
+    setShowLogoutDialog(false)
   }
 
   // Handle tab change - fetch data if not loaded
@@ -777,32 +945,93 @@ function App() {
     return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
-  // Handle navigation from home page
+  // Handle navigation from home page - check auth first
   const handleHomeNavigation = (tabName) => {
+    // If trying to access dashboard without auth, show login
+    if (!isAuthenticated) {
+      // Store the target tab to navigate after login
+      setActiveTab(tabName)
+      setShowHome(false)
+      return
+    }
+    // If authenticated, navigate to dashboard
     setShowHome(false)
     setActiveTab(tabName)
     fetchTabData(tabName)
   }
 
-  // Show home page
+  // Show home page (public access - no auth required)
   if (showHome) {
     return (
-      <div className="app">
-        <header className="header">
-          <div className="header-content">
-            <div className="header-brand">
-              <div className="brand-logo">
-                <Activity size={24} />
+      <>
+        {/* Logout Confirmation Dialog */}
+        {showLogoutDialog && (
+          <div className="logout-dialog-overlay" onClick={handleCancelLogout}>
+            <div className="logout-dialog" onClick={(e) => e.stopPropagation()}>
+              <button className="dialog-close-btn" onClick={handleCancelLogout}>
+                <X size={20} />
+              </button>
+              <div className="dialog-icon-wrapper">
+                <AlertCircle size={48} className="dialog-icon" />
               </div>
-              <h1>X Fin Ai</h1>
+              <h2 className="dialog-title">Confirm Logout</h2>
+              <p className="dialog-message">
+                Are you sure you want to logout? You will need to login again to access the dashboard.
+              </p>
+              <div className="dialog-actions">
+                <button 
+                  className="dialog-btn dialog-btn-cancel" 
+                  onClick={handleCancelLogout}
+                >
+                  <X size={18} />
+                  Cancel
+                </button>
+                <button 
+                  className="dialog-btn dialog-btn-confirm" 
+                  onClick={handleLogout}
+                >
+                  <LogOut size={18} />
+                  Logout
+                </button>
+              </div>
             </div>
           </div>
-        </header>
-        <main className="main-content home-main">
-          <HomePage onNavigate={handleHomeNavigation} />
-        </main>
-      </div>
+        )}
+
+        <div className="app">
+          <header className="header">
+            <div className="header-content">
+              <div className="header-brand">
+                <div className="brand-logo">
+                  <Activity size={24} />
+                </div>
+                <h1>X Fin Ai</h1>
+              </div>
+              {isAuthenticated && (
+                <div className="header-actions">
+                  <span className="user-name">{username}</span>
+                  <button 
+                    className="logout-btn"
+                    onClick={handleLogoutClick}
+                    title="Logout"
+                  >
+                    <LogOut size={20} />
+                  </button>
+                </div>
+              )}
+            </div>
+          </header>
+          <main className="main-content home-main">
+            <HomePage onNavigate={handleHomeNavigation} />
+          </main>
+        </div>
+      </>
     )
+  }
+
+  // Show login page if trying to access dashboard without authentication
+  if (!isAuthenticated && !showHome) {
+    return <Login onLoginSuccess={handleLoginSuccess} />
   }
 
   if (loadingTab) {
@@ -815,27 +1044,72 @@ function App() {
   }
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="header-content">
-          <div className="header-brand">
-            <button className="menu-toggle" onClick={toggleSidebar}>
-              <Menu size={24} />
+    <>
+      {/* Logout Confirmation Dialog */}
+      {showLogoutDialog && (
+        <div className="logout-dialog-overlay" onClick={handleCancelLogout}>
+          <div className="logout-dialog" onClick={(e) => e.stopPropagation()}>
+            <button className="dialog-close-btn" onClick={handleCancelLogout}>
+              <X size={20} />
             </button>
-            <button 
-              className="home-btn"
-              onClick={() => setShowHome(true)}
-              title="Go to Home"
-            >
-              <Home size={20} />
-            </button>
-            <div className="brand-logo">
-              <Activity size={24} />
+            <div className="dialog-icon-wrapper">
+              <AlertCircle size={48} className="dialog-icon" />
             </div>
-            <h1>X Fin Ai</h1>
+            <h2 className="dialog-title">Confirm Logout</h2>
+            <p className="dialog-message">
+              Are you sure you want to logout? You will need to login again to access the dashboard.
+            </p>
+            <div className="dialog-actions">
+              <button 
+                className="dialog-btn dialog-btn-cancel" 
+                onClick={handleCancelLogout}
+              >
+                <X size={18} />
+                Cancel
+              </button>
+              <button 
+                className="dialog-btn dialog-btn-confirm" 
+                onClick={handleLogout}
+              >
+                <LogOut size={18} />
+                Logout
+              </button>
+            </div>
           </div>
         </div>
-      </header>
+      )}
+
+      <div className="app">
+        <header className="header">
+          <div className="header-content">
+            <div className="header-brand">
+              <button className="menu-toggle" onClick={toggleSidebar}>
+                <Menu size={24} />
+              </button>
+              <button 
+                className="home-btn"
+                onClick={() => setShowHome(true)}
+                title="Go to Home"
+              >
+                <Home size={20} />
+              </button>
+              <div className="brand-logo">
+                <Activity size={24} />
+              </div>
+              <h1>X Fin Ai</h1>
+            </div>
+            <div className="header-actions">
+              <span className="user-name">{username}</span>
+              <button 
+                className="logout-btn"
+                onClick={handleLogoutClick}
+                title="Logout"
+              >
+                <LogOut size={20} />
+              </button>
+            </div>
+          </div>
+        </header>
 
       {/* Sidebar Overlay for mobile */}
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)}></div>}
@@ -1108,9 +1382,9 @@ function App() {
 
             {/* FII/DII Data Table Card */}
             <div className="card data-card">
-              <div className="card-header">
+                <div className="card-header">
                 <h2>FII/DII Collected Data</h2>
-                <span className="badge">{data.length} records</span>
+                <span className="badge">{pagination['fiidii']?.total || data.length} records</span>
               </div>
 
               {data.length === 0 ? (
@@ -1119,6 +1393,7 @@ function App() {
                   <p>No data available</p>
                 </div>
               ) : (
+                <>
                 <div className="table-container">
                   <table className="data-table">
                     <thead>
@@ -1162,6 +1437,8 @@ function App() {
                     </tbody>
                   </table>
                 </div>
+                <Pagination tabName="fiidii" />
+                </>
               )}
             </div>
           </>
@@ -3681,6 +3958,7 @@ function App() {
         </div>
       </main>
     </div>
+    </>
   )
 }
 
