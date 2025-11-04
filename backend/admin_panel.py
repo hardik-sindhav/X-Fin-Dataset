@@ -854,6 +854,7 @@ def api_finnifty_status():
 
 
 @app.route('/api/finnifty/data')
+@token_required
 def api_finnifty_data():
     """API endpoint to get collected Finnifty option chain data with pagination"""
     try:
@@ -1027,13 +1028,20 @@ def api_midcpnifty_status():
 
 
 @app.route('/api/midcpnifty/data')
+@token_required
 def api_midcpnifty_data():
-    """API endpoint to get collected MidcapNifty option chain data"""
+    """API endpoint to get collected MidcapNifty option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEMidcapNiftyOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1060,9 +1068,17 @@ def api_midcpnifty_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -1250,13 +1266,20 @@ def api_hdfcbank_status():
 
 
 @app.route('/api/hdfcbank/data')
+@token_required
 def api_hdfcbank_data():
-    """API endpoint to get collected HDFC Bank option chain data"""
+    """API endpoint to get collected HDFC Bank option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEHDFCBankOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1278,9 +1301,17 @@ def api_hdfcbank_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -1467,13 +1498,20 @@ def api_icicibank_status():
 
 
 @app.route('/api/icicibank/data')
+@token_required
 def api_icicibank_data():
-    """API endpoint to get collected ICICI Bank option chain data"""
+    """API endpoint to get collected ICICI Bank option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEICICIBankOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1495,9 +1533,17 @@ def api_icicibank_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -1684,13 +1730,20 @@ def api_sbin_status():
 
 
 @app.route('/api/sbin/data')
+@token_required
 def api_sbin_data():
-    """API endpoint to get collected SBIN option chain data"""
+    """API endpoint to get collected SBIN option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSESBINOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1712,9 +1765,17 @@ def api_sbin_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -1901,13 +1962,20 @@ def api_kotakbank_status():
 
 
 @app.route('/api/kotakbank/data')
+@token_required
 def api_kotakbank_data():
-    """API endpoint to get collected Kotak Bank option chain data"""
+    """API endpoint to get collected Kotak Bank option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEKotakBankOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1929,9 +1997,17 @@ def api_kotakbank_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -2118,13 +2194,20 @@ def api_axisbank_status():
 
 
 @app.route('/api/axisbank/data')
+@token_required
 def api_axisbank_data():
-    """API endpoint to get collected Axis Bank option chain data"""
+    """API endpoint to get collected Axis Bank option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEAxisBankOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -2146,9 +2229,17 @@ def api_axisbank_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -2335,13 +2426,20 @@ def api_bankbaroda_status():
 
 
 @app.route('/api/bankbaroda/data')
+@token_required
 def api_bankbaroda_data():
-    """API endpoint to get collected Bank of Baroda option chain data"""
+    """API endpoint to get collected Bank of Baroda option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEBankBarodaOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -2363,9 +2461,17 @@ def api_bankbaroda_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -2552,13 +2658,20 @@ def api_pnb_status():
 
 
 @app.route('/api/pnb/data')
+@token_required
 def api_pnb_data():
-    """API endpoint to get collected PNB option chain data"""
+    """API endpoint to get collected PNB option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEPNBOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -2580,9 +2693,17 @@ def api_pnb_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -2769,13 +2890,20 @@ def api_canbk_status():
 
 
 @app.route('/api/canbk/data')
+@token_required
 def api_canbk_data():
-    """API endpoint to get collected CANBK option chain data"""
+    """API endpoint to get collected CANBK option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSECANBKOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -2797,9 +2925,17 @@ def api_canbk_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -2986,13 +3122,20 @@ def api_aubank_status():
 
 
 @app.route('/api/aubank/data')
+@token_required
 def api_aubank_data():
-    """API endpoint to get collected AUBANK option chain data"""
+    """API endpoint to get collected AUBANK option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEAUBANKOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -3014,9 +3157,17 @@ def api_aubank_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -3203,13 +3354,20 @@ def api_indusindbk_status():
 
 
 @app.route('/api/indusindbk/data')
+@token_required
 def api_indusindbk_data():
-    """API endpoint to get collected INDUSINDBK option chain data"""
+    """API endpoint to get collected INDUSINDBK option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEIndusIndBkOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -3231,9 +3389,17 @@ def api_indusindbk_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -3420,13 +3586,20 @@ def api_idfcfirstb_status():
 
 
 @app.route('/api/idfcfirstb/data')
+@token_required
 def api_idfcfirstb_data():
-    """API endpoint to get collected IDFCFIRSTB option chain data"""
+    """API endpoint to get collected IDFCFIRSTB option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEIDFCFIRSTBOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -3448,9 +3621,17 @@ def api_idfcfirstb_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -3637,13 +3818,20 @@ def api_federalbnk_status():
 
 
 @app.route('/api/federalbnk/data')
+@token_required
 def api_federalbnk_data():
-    """API endpoint to get collected FEDERALBNK option chain data"""
+    """API endpoint to get collected FEDERALBNK option chain data with pagination"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEFEDERALBNKOptionChainCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -3665,9 +3853,17 @@ def api_federalbnk_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:

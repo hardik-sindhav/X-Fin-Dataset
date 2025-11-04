@@ -246,155 +246,297 @@ function App() {
         case 'finnifty':
           const [fnStatusRes, fnDataRes, fnStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/finnifty/status`),
-            axios.get(`${API_BASE}/finnifty/data`),
+            axios.get(`${API_BASE}/finnifty/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/finnifty/stats`)
           ])
           setFinniftyStatus(fnStatusRes.data)
           setFinniftyData(fnDataRes.data.data || [])
           setFinniftyStats(fnStatsRes.data.stats)
+          // Update pagination state
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: fnDataRes.data.page || page,
+              total: fnDataRes.data.total || 0,
+              total_pages: fnDataRes.data.total_pages || 1,
+              has_next: fnDataRes.data.has_next || false,
+              has_prev: fnDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'midcpnifty':
           const [midcpStatusRes, midcpDataRes, midcpStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/midcpnifty/status`),
-            axios.get(`${API_BASE}/midcpnifty/data`),
+            axios.get(`${API_BASE}/midcpnifty/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/midcpnifty/stats`)
           ])
           setMidcpniftyStatus(midcpStatusRes.data)
           setMidcpniftyData(midcpDataRes.data.data || [])
           setMidcpniftyStats(midcpStatsRes.data.stats)
+          // Update pagination state
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: midcpDataRes.data.page || page,
+              total: midcpDataRes.data.total || 0,
+              total_pages: midcpDataRes.data.total_pages || 1,
+              has_next: midcpDataRes.data.has_next || false,
+              has_prev: midcpDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'hdfcbank':
           const [hdfcStatusRes, hdfcDataRes, hdfcStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/hdfcbank/status`),
-            axios.get(`${API_BASE}/hdfcbank/data`),
+            axios.get(`${API_BASE}/hdfcbank/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/hdfcbank/stats`)
           ])
           setHdfcbankStatus(hdfcStatusRes.data)
           setHdfcbankData(hdfcDataRes.data.data || [])
           setHdfcbankStats(hdfcStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: hdfcDataRes.data.page || page,
+              total: hdfcDataRes.data.total || 0,
+              total_pages: hdfcDataRes.data.total_pages || 1,
+              has_next: hdfcDataRes.data.has_next || false,
+              has_prev: hdfcDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'icicibank':
           const [iciciStatusRes, iciciDataRes, iciciStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/icicibank/status`),
-            axios.get(`${API_BASE}/icicibank/data`),
+            axios.get(`${API_BASE}/icicibank/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/icicibank/stats`)
           ])
           setIcicibankStatus(iciciStatusRes.data)
           setIcicibankData(iciciDataRes.data.data || [])
           setIcicibankStats(iciciStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: iciciDataRes.data.page || page,
+              total: iciciDataRes.data.total || 0,
+              total_pages: iciciDataRes.data.total_pages || 1,
+              has_next: iciciDataRes.data.has_next || false,
+              has_prev: iciciDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'sbin':
           const [sbinStatusRes, sbinDataRes, sbinStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/sbin/status`),
-            axios.get(`${API_BASE}/sbin/data`),
+            axios.get(`${API_BASE}/sbin/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/sbin/stats`)
           ])
           setSbinStatus(sbinStatusRes.data)
           setSbinData(sbinDataRes.data.data || [])
           setSbinStats(sbinStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: sbinDataRes.data.page || page,
+              total: sbinDataRes.data.total || 0,
+              total_pages: sbinDataRes.data.total_pages || 1,
+              has_next: sbinDataRes.data.has_next || false,
+              has_prev: sbinDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'kotakbank':
           const [kotakStatusRes, kotakDataRes, kotakStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/kotakbank/status`),
-            axios.get(`${API_BASE}/kotakbank/data`),
+            axios.get(`${API_BASE}/kotakbank/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/kotakbank/stats`)
           ])
           setKotakbankStatus(kotakStatusRes.data)
           setKotakbankData(kotakDataRes.data.data || [])
           setKotakbankStats(kotakStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: kotakDataRes.data.page || page,
+              total: kotakDataRes.data.total || 0,
+              total_pages: kotakDataRes.data.total_pages || 1,
+              has_next: kotakDataRes.data.has_next || false,
+              has_prev: kotakDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'axisbank':
           const [axisStatusRes, axisDataRes, axisStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/axisbank/status`),
-            axios.get(`${API_BASE}/axisbank/data`),
+            axios.get(`${API_BASE}/axisbank/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/axisbank/stats`)
           ])
           setAxisbankStatus(axisStatusRes.data)
           setAxisbankData(axisDataRes.data.data || [])
           setAxisbankStats(axisStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: axisDataRes.data.page || page,
+              total: axisDataRes.data.total || 0,
+              total_pages: axisDataRes.data.total_pages || 1,
+              has_next: axisDataRes.data.has_next || false,
+              has_prev: axisDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'bankbaroda':
           const [bbStatusRes, bbDataRes, bbStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/bankbaroda/status`),
-            axios.get(`${API_BASE}/bankbaroda/data`),
+            axios.get(`${API_BASE}/bankbaroda/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/bankbaroda/stats`)
           ])
           setBankbarodaStatus(bbStatusRes.data)
           setBankbarodaData(bbDataRes.data.data || [])
           setBankbarodaStats(bbStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: bbDataRes.data.page || page,
+              total: bbDataRes.data.total || 0,
+              total_pages: bbDataRes.data.total_pages || 1,
+              has_next: bbDataRes.data.has_next || false,
+              has_prev: bbDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'pnb':
           const [pnbStatusRes, pnbDataRes, pnbStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/pnb/status`),
-            axios.get(`${API_BASE}/pnb/data`),
+            axios.get(`${API_BASE}/pnb/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/pnb/stats`)
           ])
           setPnbStatus(pnbStatusRes.data)
           setPnbData(pnbDataRes.data.data || [])
           setPnbStats(pnbStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: pnbDataRes.data.page || page,
+              total: pnbDataRes.data.total || 0,
+              total_pages: pnbDataRes.data.total_pages || 1,
+              has_next: pnbDataRes.data.has_next || false,
+              has_prev: pnbDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'canbk':
           const [canbkStatusRes, canbkDataRes, canbkStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/canbk/status`),
-            axios.get(`${API_BASE}/canbk/data`),
+            axios.get(`${API_BASE}/canbk/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/canbk/stats`)
           ])
           setCanbkStatus(canbkStatusRes.data)
           setCanbkData(canbkDataRes.data.data || [])
           setCanbkStats(canbkStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: canbkDataRes.data.page || page,
+              total: canbkDataRes.data.total || 0,
+              total_pages: canbkDataRes.data.total_pages || 1,
+              has_next: canbkDataRes.data.has_next || false,
+              has_prev: canbkDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'aubank':
           const [aubankStatusRes, aubankDataRes, aubankStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/aubank/status`),
-            axios.get(`${API_BASE}/aubank/data`),
+            axios.get(`${API_BASE}/aubank/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/aubank/stats`)
           ])
           setAubankStatus(aubankStatusRes.data)
           setAubankData(aubankDataRes.data.data || [])
           setAubankStats(aubankStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: aubankDataRes.data.page || page,
+              total: aubankDataRes.data.total || 0,
+              total_pages: aubankDataRes.data.total_pages || 1,
+              has_next: aubankDataRes.data.has_next || false,
+              has_prev: aubankDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'indusindbk':
           const [indusindStatusRes, indusindDataRes, indusindStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/indusindbk/status`),
-            axios.get(`${API_BASE}/indusindbk/data`),
+            axios.get(`${API_BASE}/indusindbk/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/indusindbk/stats`)
           ])
           setIndusindbkStatus(indusindStatusRes.data)
           setIndusindbkData(indusindDataRes.data.data || [])
           setIndusindbkStats(indusindStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: indusindDataRes.data.page || page,
+              total: indusindDataRes.data.total || 0,
+              total_pages: indusindDataRes.data.total_pages || 1,
+              has_next: indusindDataRes.data.has_next || false,
+              has_prev: indusindDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'idfcfirstb':
           const [idfcStatusRes, idfcDataRes, idfcStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/idfcfirstb/status`),
-            axios.get(`${API_BASE}/idfcfirstb/data`),
+            axios.get(`${API_BASE}/idfcfirstb/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/idfcfirstb/stats`)
           ])
           setIdfcfirstbStatus(idfcStatusRes.data)
           setIdfcfirstbData(idfcDataRes.data.data || [])
           setIdfcfirstbStats(idfcStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: idfcDataRes.data.page || page,
+              total: idfcDataRes.data.total || 0,
+              total_pages: idfcDataRes.data.total_pages || 1,
+              has_next: idfcDataRes.data.has_next || false,
+              has_prev: idfcDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'federalbnk':
           const [federalStatusRes, federalDataRes, federalStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/federalbnk/status`),
-            axios.get(`${API_BASE}/federalbnk/data`),
+            axios.get(`${API_BASE}/federalbnk/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/federalbnk/stats`)
           ])
           setFederalbnkStatus(federalStatusRes.data)
           setFederalbnkData(federalDataRes.data.data || [])
           setFederalbnkStats(federalStatsRes.data.stats)
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: federalDataRes.data.page || page,
+              total: federalDataRes.data.total || 0,
+              total_pages: federalDataRes.data.total_pages || 1,
+              has_next: federalDataRes.data.has_next || false,
+              has_prev: federalDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'gainers':
@@ -1654,6 +1796,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="option-chain" />
             </div>
           </>
         ) : activeTab === 'banknifty' ? (
@@ -1783,6 +1926,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="banknifty" />
             </div>
           </>
         ) : activeTab === 'finnifty' ? (
@@ -1912,6 +2056,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="finnifty" />
             </div>
           </>
         ) : activeTab === 'midcpnifty' ? (
@@ -2041,6 +2186,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="midcpnifty" />
             </div>
           </>
         ) : activeTab === 'hdfcbank' ? (
@@ -2170,6 +2316,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="hdfcbank" />
             </div>
           </>
         ) : activeTab === 'icicibank' ? (
@@ -2299,6 +2446,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="icicibank" />
             </div>
           </>
         ) : activeTab === 'sbin' ? (
@@ -2428,6 +2576,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="sbin" />
             </div>
           </>
         ) : activeTab === 'kotakbank' ? (
@@ -2557,6 +2706,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="kotakbank" />
             </div>
           </>
         ) : activeTab === 'axisbank' ? (
@@ -2686,6 +2836,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="axisbank" />
             </div>
           </>
         ) : activeTab === 'bankbaroda' ? (
@@ -2815,6 +2966,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="bankbaroda" />
             </div>
           </>
         ) : activeTab === 'pnb' ? (
@@ -2944,6 +3096,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="pnb" />
             </div>
           </>
         ) : activeTab === 'canbk' ? (
@@ -3073,6 +3226,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="canbk" />
             </div>
           </>
         ) : activeTab === 'aubank' ? (
@@ -3202,6 +3356,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="aubank" />
             </div>
           </>
         ) : activeTab === 'indusindbk' ? (
@@ -3331,6 +3486,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="indusindbk" />
             </div>
           </>
         ) : activeTab === 'idfcfirstb' ? (
@@ -3460,6 +3616,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="idfcfirstb" />
             </div>
           </>
         ) : activeTab === 'federalbnk' ? (
@@ -3589,6 +3746,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="federalbnk" />
             </div>
           </>
         ) : activeTab === 'gainers' ? (
