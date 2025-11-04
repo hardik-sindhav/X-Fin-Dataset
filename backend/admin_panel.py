@@ -25,6 +25,7 @@ from nse_federalbnk_option_chain_collector import NSEFEDERALBNKOptionChainCollec
 from nse_gainers_collector import NSEGainersCollector
 from nse_losers_collector import NSELosersCollector
 from nse_news_collector import NSENewsCollector
+from nse_livemint_news_collector import NSELiveMintNewsCollector
 
 # Twitter collector removed - not needed
 import schedule
@@ -72,6 +73,7 @@ FEDERALBNK_STATUS_FILE = 'federalbnk_option_chain_scheduler_status.json'
 GAINERS_STATUS_FILE = 'gainers_scheduler_status.json'
 LOSERS_STATUS_FILE = 'losers_scheduler_status.json'
 NEWS_COLLECTOR_STATUS_FILE = 'news_collector_scheduler_status.json'
+LIVEMINT_NEWS_STATUS_FILE = 'livemint_news_scheduler_status.json'
 
 
 def get_next_run_time():
@@ -4419,6 +4421,243 @@ def api_news_trigger():
 # Twitter collector endpoints removed - not needed
 
 
+# ==================== LiveMint News Collector Endpoints ====================
+
+def get_livemint_news_collector_next_run_time():
+    """Calculate next scheduled run time for LiveMint news collector (07:00 AM to 03:30 PM, every 15 minutes)"""
+    now = datetime.now()
+    current_time = now.time()
+    start_time = dt_time(7, 0)   # 07:00 AM
+    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get current day of week (0 = Monday, 6 = Sunday)
+    current_weekday = now.weekday()
+    
+    # If it's a weekend, return next Monday 07:00
+    if current_weekday >= 5:  # Saturday or Sunday
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        next_date = now.date() + timedelta(days=days_until_monday)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # If before market opens today, return today 07:00
+    if current_time < start_time:
+        next_run = datetime.combine(now.date(), start_time)
+        return next_run
+    
+    # If after market closes today, return next weekday 07:00
+    if current_time > end_time:
+        days_ahead = 1
+        while (current_weekday + days_ahead) % 7 >= 5:
+            days_ahead += 1
+        next_date = now.date() + timedelta(days=days_ahead)
+        next_run = datetime.combine(next_date, start_time)
+        return next_run
+    
+    # We're within market hours (07:00 to 03:30)
+    # Calculate next 15-minute interval
+    current_minute = now.minute
+    next_minute = ((current_minute // 15) + 1) * 15
+    
+    if next_minute >= 60:
+        # Move to next hour
+        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 07:00
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+    else:
+        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        if next_time.time() > end_time:
+            # After market close, go to next weekday 07:00
+            days_ahead = 1
+            while (current_weekday + days_ahead) % 7 >= 5:
+                days_ahead += 1
+            next_date = now.date() + timedelta(days=days_ahead)
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return next_time
+
+
+def get_livemint_news_collector_status():
+    """Get LiveMint news collector scheduler status from file or calculate"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('livemint_news_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_livemint_news_collector_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    if os.path.exists(LIVEMINT_NEWS_STATUS_FILE):
+        try:
+            with open(LIVEMINT_NEWS_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+        except Exception as e:
+            pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
+    return status
+
+
+@app.route('/api/livemint-news/status')
+@token_required
+def api_livemint_news_status():
+    """API endpoint to get LiveMint news collector scheduler status"""
+    status = get_livemint_news_collector_status()
+    return jsonify(status)
+
+
+@app.route('/api/livemint-news/data')
+@token_required
+def api_livemint_news_data():
+    """API endpoint to get collected LiveMint news data"""
+    try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
+        collector = NSELiveMintNewsCollector()
+        
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by pub_date (newest first)
+        records = list(collector.collection.find().sort("pub_date", -1).skip(skip).limit(limit))
+        
+        # Convert ObjectId to string and format dates
+        data = []
+        for record in records:
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "date": record.get("date"),
+                "source": record.get("source"),
+                "title": record.get("title"),
+                "description": record.get("description"),
+                "source_type": record.get("source_type"),
+                "sentiment": record.get("sentiment"),
+                "link": record.get("link"),
+                "image_url": record.get("image_url"),
+                "pub_date": record.get("pub_date").isoformat() if record.get("pub_date") else None,
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None
+            }
+            data.append(record_dict)
+        
+        collector.close()
+        
+        total_pages = (total_count + limit - 1) // limit
+        
+        return jsonify({
+            "success": True,
+            "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
+            "data": data
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/livemint-news/stats')
+@token_required
+def api_livemint_news_stats():
+    """API endpoint to get LiveMint news statistics"""
+    try:
+        collector = NSELiveMintNewsCollector()
+        
+        total_count = collector.collection.count_documents({})
+        
+        # Get today's date
+        import pytz
+        ist = pytz.timezone("Asia/Kolkata")
+        today = datetime.now(ist).date().isoformat()
+        
+        # Count by sentiment
+        positive_count = collector.collection.count_documents({"sentiment": "Positive", "date": today})
+        negative_count = collector.collection.count_documents({"sentiment": "Negative", "date": today})
+        neutral_count = collector.collection.count_documents({"sentiment": "Neutral", "date": today})
+        
+        stats = {
+            "total_records": total_count,
+            "today_count": collector.collection.count_documents({"date": today}),
+            "today_positive": positive_count,
+            "today_negative": negative_count,
+            "today_neutral": neutral_count
+        }
+        
+        collector.close()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/livemint-news/trigger', methods=['POST'])
+@token_required
+def api_livemint_news_trigger():
+    """API endpoint to manually trigger LiveMint news collection"""
+    try:
+        collector = NSELiveMintNewsCollector()
+        success = collector.collect_and_save()
+        collector.close()
+        
+        # Update status file
+        status_data = {
+            "last_run": datetime.now().isoformat(),
+            "last_status": "success" if success else "failed",
+            "manual_trigger": True
+        }
+        with open(LIVEMINT_NEWS_STATUS_FILE, 'w') as f:
+            json.dump(status_data, f)
+        
+        return jsonify({
+            "success": success,
+            "message": "LiveMint news collection completed" if success else "LiveMint news collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 def start_all_schedulers_in_background():
     """Start all schedulers in background threads"""
     import logging
@@ -4458,6 +4697,7 @@ def start_all_schedulers_in_background():
         ('gainers_scheduler', 'Top 20 Gainers Collector'),
         ('losers_scheduler', 'Top 20 Losers Collector'),
         ('news_collector_scheduler', 'News Collector'),
+        ('livemint_news_scheduler', 'LiveMint News Collector'),
     ]
     
     def run_scheduler_in_thread(module_name, scheduler_name):

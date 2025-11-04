@@ -6,8 +6,9 @@ Runs Monday to Friday from 09:00 AM to 03:30 PM, every 15 minutes
 import schedule
 import time
 import logging
+import threading
 from nse_news_collector import NSENewsCollector
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timedelta
 import json
 import os
 
@@ -28,6 +29,11 @@ END_TIME = dt_time(15, 30)  # 03:30 PM (15:30)
 INTERVAL_MINUTES = 15
 
 STATUS_FILE = 'news_collector_scheduler_status.json'
+
+# Execution lock to prevent concurrent runs
+execution_lock = threading.Lock()
+last_run_time = None
+MIN_INTERVAL_SECONDS = INTERVAL_MINUTES * 60 - 30  # Allow 30 seconds buffer for 15 min interval
 
 
 def is_market_hours(now: datetime) -> bool:
@@ -50,19 +56,35 @@ def is_market_hours(now: datetime) -> bool:
 
 def run_collector():
     """Execute the NSE news collector"""
+    global last_run_time
+    
+    # Check if already running (non-blocking check)
+    if not execution_lock.acquire(blocking=False):
+        logger.warning("Collector is already running, skipping this execution")
+        return
+    
+    # Check minimum interval
+    now = datetime.now()
+    if last_run_time:
+        time_since_last_run = (now - last_run_time).total_seconds()
+        if time_since_last_run < MIN_INTERVAL_SECONDS:
+            execution_lock.release()
+            logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {MIN_INTERVAL_SECONDS}s)")
+            return
+    
     collector = None
     try:
-        now = datetime.now()
-        
         # Check if it's market hours before running
         if not is_market_hours(now):
             logger.info(f"Outside market hours. Current time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+            execution_lock.release()
             return
         
         logger.info("=" * 60)
         logger.info(f"News Collector Cronjob triggered at {now}")
         logger.info("=" * 60)
         
+        last_run_time = now
         collector = NSENewsCollector()
         success = collector.collect_and_save()
         
@@ -97,6 +119,7 @@ def run_collector():
     finally:
         if collector:
             collector.close()
+        execution_lock.release()
         logger.info("=" * 60)
 
 
@@ -115,8 +138,8 @@ def main():
     try:
         while True:
             schedule.run_pending()
-            # Sleep for 1 minute to check for scheduled jobs
-            time.sleep(60)
+            # Sleep for 10 seconds for better timing accuracy
+            time.sleep(10)
     except KeyboardInterrupt:
         logger.info("Scheduler stopped by user")
     except Exception as e:

@@ -1,13 +1,13 @@
 """
-Cronjob Scheduler for NSE Option Chain Data Collector
-Runs Monday to Friday from 09:15 AM to 03:30 PM, every 3 minutes
+Cronjob Scheduler for LiveMint News Collector
+Runs Monday to Friday from 07:00 AM to 03:30 PM, every 15 minutes
 """
 
 import schedule
 import time
 import logging
 import threading
-from nse_option_chain_collector import NSEOptionChainCollector
+from nse_livemint_news_collector import NSELiveMintNewsCollector
 from datetime import datetime, time as dt_time, timedelta
 import json
 import os
@@ -17,28 +17,28 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('option_chain_scheduler.log', encoding='utf-8'),
+        logging.FileHandler('livemint_news_scheduler.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
 # Configuration
-START_TIME = dt_time(9, 15)  # 09:15 AM
+START_TIME = dt_time(7, 0)    # 07:00 AM
 END_TIME = dt_time(15, 30)   # 03:30 PM (15:30)
-INTERVAL_MINUTES = 3
+INTERVAL_MINUTES = 15
 
-STATUS_FILE = 'option_chain_scheduler_status.json'
+STATUS_FILE = 'livemint_news_scheduler_status.json'
 
 # Execution lock to prevent concurrent runs
 execution_lock = threading.Lock()
 last_run_time = None
-MIN_INTERVAL_SECONDS = INTERVAL_MINUTES * 60 - 10  # Allow 10 seconds buffer
+MIN_INTERVAL_SECONDS = INTERVAL_MINUTES * 60 - 30  # Allow 30 seconds buffer for 15 min interval
 
 
 def is_market_hours(now: datetime) -> bool:
     """
-    Check if current time is within market hours (09:15 AM to 03:30 PM)
+    Check if current time is within market hours (07:00 AM to 03:30 PM)
     and if it's a weekday (Monday-Friday)
     """
     # Check if weekday (Monday=0 to Friday=4)
@@ -47,7 +47,7 @@ def is_market_hours(now: datetime) -> bool:
     
     current_time = now.time()
     
-    # Check if time is between 09:15 and 15:30
+    # Check if time is between 07:00 and 15:30
     if current_time < START_TIME or current_time > END_TIME:
         return False
     
@@ -55,7 +55,7 @@ def is_market_hours(now: datetime) -> bool:
 
 
 def run_collector():
-    """Execute the NSE option chain data collector"""
+    """Execute the LiveMint news collector"""
     global last_run_time
     
     # Check if already running (non-blocking check)
@@ -81,17 +81,17 @@ def run_collector():
             return
         
         logger.info("=" * 60)
-        logger.info(f"Option Chain Cronjob triggered at {now}")
+        logger.info(f"LiveMint News Collector Cronjob triggered at {now}")
         logger.info("=" * 60)
         
         last_run_time = now
-        collector = NSEOptionChainCollector()
+        collector = NSELiveMintNewsCollector()
         success = collector.collect_and_save()
         
         if success:
-            logger.info("Option Chain Cronjob completed successfully")
+            logger.info("LiveMint News Collector Cronjob completed successfully")
         else:
-            logger.error("Option Chain Cronjob completed with errors")
+            logger.error("LiveMint News Collector Cronjob completed with errors")
         
         # Update status file
         status_data = {
@@ -105,7 +105,7 @@ def run_collector():
             logger.warning(f"Failed to update status file: {str(e)}")
             
     except Exception as e:
-        logger.error(f"Option Chain Cronjob failed with error: {str(e)}")
+        logger.error(f"LiveMint News Collector Cronjob failed with error: {str(e)}")
         # Update status file with error
         status_data = {
             "last_run": datetime.now().isoformat(),
@@ -125,10 +125,10 @@ def run_collector():
 
 def main():
     """Setup and run the scheduler"""
-    logger.info("Starting NSE Option Chain Data Collector Scheduler")
+    logger.info("Starting LiveMint News Collector Scheduler")
     logger.info(f"Schedule: Monday to Friday from {START_TIME.strftime('%H:%M')} to {END_TIME.strftime('%H:%M')}, every {INTERVAL_MINUTES} minutes")
     
-    # Schedule job to run every 3 minutes during weekdays
+    # Schedule job to run every 15 minutes during weekdays
     # We'll check market hours inside the run_collector function
     schedule.every(INTERVAL_MINUTES).minutes.do(run_collector)
     

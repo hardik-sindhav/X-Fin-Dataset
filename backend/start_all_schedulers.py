@@ -112,6 +112,7 @@ def main():
         ('gainers_scheduler', 'Top 20 Gainers Collector'),
         ('losers_scheduler', 'Top 20 Losers Collector'),
         ('news_collector_scheduler', 'News Collector'),
+        ('livemint_news_scheduler', 'LiveMint News Collector'),
     ]
     
     threads = []

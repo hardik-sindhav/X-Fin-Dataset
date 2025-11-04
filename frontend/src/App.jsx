@@ -34,7 +34,7 @@ function App() {
   const [username, setUsername] = useState('')
   const [showHome, setShowHome] = useState(true) // Start with home page
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
-  const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'gainers', 'losers', or 'news'
+  const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'gainers', 'losers', 'news', or 'livemint-news'
   
   // FII/DII state
   const [status, setStatus] = useState(null)
@@ -126,6 +126,11 @@ function App() {
   const [newsData, setNewsData] = useState([])
   const [newsStats, setNewsStats] = useState(null)
   
+  // LiveMint News state
+  const [livemintNewsStatus, setLivemintNewsStatus] = useState(null)
+  const [livemintNewsData, setLivemintNewsData] = useState([])
+  const [livemintNewsStats, setLivemintNewsStats] = useState(null)
+  
   // Gainers state
   const [gainersStatus, setGainersStatus] = useState(null)
   const [gainersData, setGainersData] = useState([])
@@ -164,6 +169,7 @@ function App() {
   const [gainersTriggering, setGainersTriggering] = useState(false)
   const [losersTriggering, setLosersTriggering] = useState(false)
   const [newsTriggering, setNewsTriggering] = useState(false)
+  const [livemintNewsTriggering, setLivemintNewsTriggering] = useState(false)
 
   // Fetch data for a specific tab only if not already loaded
   const fetchTabData = async (tabName, forceRefresh = false, page = 1) => {
@@ -416,12 +422,45 @@ function App() {
         case 'news':
           const [newsStatusRes, newsDataRes, newsStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/news/status`),
-            axios.get(`${API_BASE}/news/data`),
+            axios.get(`${API_BASE}/news/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/news/stats`)
           ])
           setNewsStatus(newsStatusRes.data)
           setNewsData(newsDataRes.data.data || [])
           setNewsStats(newsStatsRes.data.stats)
+          // Update pagination state
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: newsDataRes.data.page || page,
+              total: newsDataRes.data.total || 0,
+              total_pages: newsDataRes.data.total_pages || 1,
+              has_next: newsDataRes.data.has_next || false,
+              has_prev: newsDataRes.data.has_prev || false
+            }
+          }))
+          break
+
+        case 'livemint-news':
+          const [livemintStatusRes, livemintDataRes, livemintStatsRes] = await Promise.all([
+            axios.get(`${API_BASE}/livemint-news/status`),
+            axios.get(`${API_BASE}/livemint-news/data?page=${page}&limit=${limit}`),
+            axios.get(`${API_BASE}/livemint-news/stats`)
+          ])
+          setLivemintNewsStatus(livemintStatusRes.data)
+          setLivemintNewsData(livemintDataRes.data.data || [])
+          setLivemintNewsStats(livemintStatsRes.data.stats)
+          // Update pagination state
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: livemintDataRes.data.page || page,
+              total: livemintDataRes.data.total || 0,
+              total_pages: livemintDataRes.data.total_pages || 1,
+              has_next: livemintDataRes.data.has_next || false,
+              has_prev: livemintDataRes.data.has_prev || false
+            }
+          }))
           break
 
         default:
@@ -926,6 +965,23 @@ function App() {
     }
   }
 
+  const handleLivemintNewsTrigger = async () => {
+    setLivemintNewsTriggering(true)
+    try {
+      const res = await axios.post(`${API_BASE}/livemint-news/trigger`)
+      if (res.data.success) {
+        alert('✅ LiveMint News Data collection completed successfully!')
+        setTimeout(() => fetchTabData('livemint-news', true), 2000)
+      } else {
+        alert('❌ LiveMint News Data collection failed: ' + (res.data.error || res.data.message))
+      }
+    } catch (error) {
+      alert('❌ Error: ' + error.message)
+    } finally {
+      setLivemintNewsTriggering(false)
+    }
+  }
+
 
   const getSentimentColor = (sentiment) => {
     if (sentiment === 'Positive') return 'positive'
@@ -1167,6 +1223,13 @@ function App() {
             >
               <Newspaper size={20} />
               News & Sentiment
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'livemint-news' ? 'active' : ''}`}
+              onClick={() => handleTabChange('livemint-news')}
+            >
+              <Newspaper size={20} />
+              LiveMint News
             </li>
           </ul>
         </div>
@@ -3952,6 +4015,166 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="news" />
+            </div>
+          </>
+        ) : activeTab === 'livemint-news' ? (
+          <>
+            {/* LiveMint News Collector Status Card */}
+            <div className="card status-card">
+              <div className="card-header">
+                <h2>LiveMint News Collector Cronjob Status</h2>
+                <button onClick={refreshCurrentTab} className="btn-icon">
+                  <RefreshCw size={20} />
+                </button>
+              </div>
+
+              <div className="status-grid">
+                <StatusItem
+                  label="Status"
+                  value={livemintNewsStatus?.running ? 'Running' : 'Stopped'}
+                  icon={livemintNewsStatus?.running ? CheckCircle : XCircle}
+                  status={livemintNewsStatus?.running ? 'success' : 'danger'}
+                />
+                <StatusItem
+                  label="Next Run"
+                  value={formatDateTime(livemintNewsStatus?.next_run)}
+                  icon={Clock}
+                />
+                <StatusItem
+                  label="Last Run"
+                  value={formatDateTime(livemintNewsStatus?.last_run)}
+                  icon={Clock}
+                />
+                <StatusItem
+                  label="Last Status"
+                  value={livemintNewsStatus?.last_status ? 
+                    livemintNewsStatus.last_status.charAt(0).toUpperCase() + livemintNewsStatus.last_status.slice(1) : 
+                    'Unknown'}
+                  icon={livemintNewsStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
+                  status={livemintNewsStatus?.last_status === 'success' ? 'success' : 'warning'}
+                />
+              </div>
+
+              <div className="actions">
+                <button 
+                  onClick={refreshCurrentTab} 
+                  className="btn btn-secondary"
+                >
+                  <RefreshCw size={18} />
+                  Refresh Status
+                </button>
+                <button 
+                  onClick={handleLivemintNewsTrigger} 
+                  className="btn btn-primary"
+                  disabled={livemintNewsTriggering}
+                >
+                  <Play size={18} />
+                  {livemintNewsTriggering ? 'Processing...' : 'Trigger Collection Now'}
+                </button>
+              </div>
+            </div>
+
+            {/* LiveMint News Statistics Card */}
+            {livemintNewsStats && (
+              <div className="card stats-card">
+                <div className="card-header">
+                  <h2>LiveMint News Statistics</h2>
+                </div>
+                <div className="stats-grid">
+                  <div className="stat-item">
+                    <Database size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Total Records</div>
+                      <div className="stat-value">{livemintNewsStats.total_records || 0}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <Newspaper size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Today's News</div>
+                      <div className="stat-value">{livemintNewsStats.today_count || 0}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <TrendingUp size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label" style={{ color: 'var(--green)' }}>Positive</div>
+                      <div className="stat-value">{livemintNewsStats.today_positive || 0}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <TrendingDown size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label" style={{ color: 'var(--red)' }}>Negative</div>
+                      <div className="stat-value">{livemintNewsStats.today_negative || 0}</div>
+                    </div>
+                  </div>
+                  <div className="stat-item">
+                    <Activity size={24} className="stat-icon" />
+                    <div>
+                      <div className="stat-label">Neutral</div>
+                      <div className="stat-value">{livemintNewsStats.today_neutral || 0}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* LiveMint News Data Table Card */}
+            <div className="card data-card">
+              <div className="card-header">
+                <h2>Collected LiveMint News</h2>
+                <span className="badge">{livemintNewsData.length} records</span>
+              </div>
+
+              {livemintNewsData.length === 0 ? (
+                <div className="empty-state">
+                  <Database size={48} />
+                  <p>No news data available</p>
+                </div>
+              ) : (
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Title</th>
+                        <th>Source</th>
+                        <th>Sentiment</th>
+                        <th>Published</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {livemintNewsData.map((record) => (
+                        <tr key={record._id}>
+                          <td className="date-cell">{record.date || '-'}</td>
+                          <td>
+                            <a 
+                              href={record.link} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              style={{ color: 'var(--primary)', textDecoration: 'none' }}
+                              onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
+                              onMouseOut={(e) => e.target.style.textDecoration = 'none'}
+                            >
+                              {record.title || '-'}
+                            </a>
+                          </td>
+                          <td className="muted">{record.source || '-'}</td>
+                          <td className={getSentimentColor(record.sentiment)}>
+                            {record.sentiment === 'Positive' && <TrendingUp size={16} />}
+                            {record.sentiment === 'Negative' && <TrendingDown size={16} />}
+                            {record.sentiment || 'Neutral'}
+                          </td>
+                          <td className="muted">{formatDateTime(record.pub_date)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <Pagination tabName="livemint-news" />
             </div>
           </>
         ) : null}
