@@ -23,6 +23,8 @@ import {
 } from 'lucide-react'
 import HomePage from './components/HomePage'
 import Login from './components/Login'
+import Footer from './components/Footer'
+import Pricing from './components/Pricing'
 import './App.css'
 
 const API_BASE = '/api'
@@ -33,6 +35,7 @@ function App() {
   const [authToken, setAuthToken] = useState(null)
   const [username, setUsername] = useState('')
   const [showHome, setShowHome] = useState(true) // Start with home page
+  const [showPricing, setShowPricing] = useState(false) // Pricing page
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'gainers', 'losers', 'news', or 'livemint-news'
   
@@ -707,6 +710,28 @@ function App() {
     }
   }, [authToken])
 
+  // Handle hash change for pricing page
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash === '#pricing') {
+        setShowPricing(true)
+        setShowHome(true) // Keep home true so header/footer stay
+      } else if (window.location.hash === '' || window.location.hash === '#home') {
+        setShowPricing(false)
+        setShowHome(true)
+      }
+    }
+    
+    window.addEventListener('hashchange', handleHashChange)
+    // Check initial hash
+    if (window.location.hash === '#pricing') {
+      setShowPricing(true)
+      setShowHome(true)
+    }
+    
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
+
   // Verify token validity
   const verifyToken = async (token, storedUsername) => {
     try {
@@ -1172,13 +1197,22 @@ function App() {
       // Store the target tab to navigate after login
       setActiveTab(tabName)
       setShowHome(false)
+      setShowPricing(false)
       return
     }
     // If authenticated, navigate to dashboard
     setShowHome(false)
+    setShowPricing(false)
     setActiveTab(tabName)
     fetchTabData(tabName)
   }
+
+  // Handle pricing page navigation
+  const handlePricingNavigation = () => {
+    setShowPricing(true)
+    setShowHome(false)
+  }
+
 
   // Show home page (public access - no auth required)
   if (showHome) {
@@ -1242,8 +1276,13 @@ function App() {
             </div>
           </header>
           <main className="main-content home-main">
-            <HomePage onNavigate={handleHomeNavigation} />
+            {showPricing ? (
+              <Pricing onNavigate={handleHomeNavigation} />
+            ) : (
+              <HomePage onNavigate={handleHomeNavigation} />
+            )}
           </main>
+          <Footer />
         </div>
       </>
     )
@@ -4362,6 +4401,7 @@ function App() {
         ) : null}
         </div>
       </main>
+      <Footer />
     </div>
     </>
   )

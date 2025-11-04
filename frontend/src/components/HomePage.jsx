@@ -909,23 +909,6 @@ function HomePage({ onNavigate }) {
           </div>
         </div>
       </section>
-
-      {/* CTA Section */}
-      <section className="cta-section">
-        <div className="cta-container">
-          <div className="cta-content">
-            <h2 className="cta-title">Ready to Get Started?</h2>
-            <p className="cta-description">Explore our comprehensive dashboard and unlock the power of financial analytics</p>
-            <button 
-              className="cta-button"
-              onClick={() => onNavigate('fiidii')}
-            >
-              Access Dashboard
-              <ArrowRight size={20} />
-            </button>
-          </div>
-        </div>
-      </section>
     </div>
   )
 }
