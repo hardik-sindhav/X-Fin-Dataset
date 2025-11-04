@@ -3845,13 +3845,20 @@ def api_gainers_status():
 
 
 @app.route('/api/gainers/data')
+@token_required
 def api_gainers_data():
     """API endpoint to get collected gainers data"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSEGainersCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -3878,9 +3885,17 @@ def api_gainers_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -4069,13 +4084,20 @@ def api_losers_status():
 
 
 @app.route('/api/losers/data')
+@token_required
 def api_losers_data():
     """API endpoint to get collected losers data"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSELosersCollector()
         
-        # Get all records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("timestamp", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by timestamp (newest first)
+        records = list(collector.collection.find().sort("timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4102,9 +4124,17 @@ def api_losers_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:
@@ -4302,13 +4332,20 @@ def api_news_status():
 
 
 @app.route('/api/news/data')
+@token_required
 def api_news_data():
     """API endpoint to get collected news data"""
     try:
+        page, limit = get_pagination_params()
+        skip = (page - 1) * limit
+        
         collector = NSENewsCollector()
         
-        # Get all records sorted by pub_date (newest first)
-        records = list(collector.collection.find().sort("pub_date", -1).limit(100))
+        # Get total count
+        total_count = collector.collection.count_documents({})
+        
+        # Get paginated records sorted by pub_date (newest first)
+        records = list(collector.collection.find().sort("pub_date", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4328,9 +4365,17 @@ def api_news_data():
         
         collector.close()
         
+        total_pages = (total_count + limit - 1) // limit
+        
         return jsonify({
             "success": True,
             "count": len(data),
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "has_next": page < total_pages,
+            "has_prev": page > 1,
             "data": data
         })
     except Exception as e:

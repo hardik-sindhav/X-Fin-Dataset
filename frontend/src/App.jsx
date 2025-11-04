@@ -400,23 +400,45 @@ function App() {
         case 'gainers':
           const [gainersStatusRes, gainersDataRes, gainersStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/gainers/status`),
-            axios.get(`${API_BASE}/gainers/data`),
+            axios.get(`${API_BASE}/gainers/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/gainers/stats`)
           ])
           setGainersStatus(gainersStatusRes.data)
           setGainersData(gainersDataRes.data.data || [])
           setGainersStats(gainersStatsRes.data.stats)
+          // Update pagination state
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: gainersDataRes.data.page || page,
+              total: gainersDataRes.data.total || 0,
+              total_pages: gainersDataRes.data.total_pages || 1,
+              has_next: gainersDataRes.data.has_next || false,
+              has_prev: gainersDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'losers':
           const [losersStatusRes, losersDataRes, losersStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/losers/status`),
-            axios.get(`${API_BASE}/losers/data`),
+            axios.get(`${API_BASE}/losers/data?page=${page}&limit=${limit}`),
             axios.get(`${API_BASE}/losers/stats`)
           ])
           setLosersStatus(losersStatusRes.data)
           setLosersData(losersDataRes.data.data || [])
           setLosersStats(losersStatsRes.data.stats)
+          // Update pagination state
+          setPagination(prev => ({
+            ...prev,
+            [tabName]: {
+              page: losersDataRes.data.page || page,
+              total: losersDataRes.data.total || 0,
+              total_pages: losersDataRes.data.total_pages || 1,
+              has_next: losersDataRes.data.has_next || false,
+              has_prev: losersDataRes.data.has_prev || false
+            }
+          }))
           break
 
         case 'news':
@@ -3705,6 +3727,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="gainers" />
             </div>
           </>
         ) : activeTab === 'losers' ? (
@@ -3843,6 +3866,7 @@ function App() {
                   </table>
                 </div>
               )}
+              <Pagination tabName="losers" />
             </div>
           </>
         ) : activeTab === 'news' ? (
