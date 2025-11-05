@@ -14,7 +14,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup SSH
+      - name: Setup SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -24,51 +24,48 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy via SSH
+      - name: Deploy on VPS
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
-            set -e
-            echo "🚀 Deploying to VPS..."
-
-            # create deployment folder if missing
-            mkdir -p /var/www/xfinai
-            cd /var/www/xfinai
-
-            # clone only once (first deploy)
-            if [ ! -d ".git" ]; then
-              echo "Cloning repo (first time only)..."
-              git clone git@github.com:hardik-sindhav/X-Fin-Dataset.git .
-            fi
-
-            echo "📦 Pulling latest changes..."
-            git reset --hard
-            git pull origin main
-
-            echo "🧠 Restarting backend + cron job..."
-            pkill -f admin_panel.py || true
-
-            cd backend
-            python3 -m venv venv || true
-            source venv/bin/activate
-            pip install -U pip
-            pip install -r requirements.txt
-            deactivate
-            cd ..
-
-            echo "⚙️ Building frontend..."
-            cd frontend
-            npm install --legacy-peer-deps
-            npm run build
-            cd ..
-
-            echo "⚙️ Building admin frontend..."
-            cd frontend-admin
-            npm install --legacy-peer-deps
-            npm run build
-            cd ..
-
-            echo "🚀 Starting backend (background)..."
-            nohup python3 backend/admin_panel.py > /var/www/xfinai/backend.log 2>&1 &
-
-            echo "✅ Deployment complete!"
+          set -e
+          echo "🚀 Starting deployment on VPS..."
+          
+          mkdir -p /var/www/xfinai
+          cd /var/www/xfinai
+          
+          if [ ! -d ".git" ]; then
+            echo "Cloning repo..."
+            git clone https://github.com/hardik-sindhav/X-Fin-Dataset.git .
+          fi
+          
+          echo "📦 Pulling latest changes..."
+          git reset --hard
+          git pull origin main
+          
+          echo "📦 Installing backend dependencies..."
+          cd backend
+          python3 -m venv venv || true
+          source venv/bin/activate
+          pip install -U pip
+          pip install -r requirements.txt
+          deactivate
+          cd ..
+          
+          echo "🧠 Restarting backend + cron job..."
+          pkill -f admin_panel.py || true
+          nohup python3 backend/admin_panel.py > /var/www/xfinai/backend.log 2>&1 &
+          
+          echo "⚙️ Building frontend..."
+          cd frontend
+          npm install --legacy-peer-deps
+          npm run build
+          cd ..
+          
+          echo "⚙️ Building admin frontend..."
+          cd frontend-admin
+          npm install --legacy-peer-deps
+          npm run build
+          cd ..
+          
+          echo "✅ Deployment complete!"
           EOF
