@@ -44,6 +44,7 @@ import sys
 import jwt
 from functools import wraps
 from werkzeug.security import check_password_hash, generate_password_hash
+from urllib.parse import quote_plus
 
 app = Flask(__name__)
 
@@ -281,9 +282,12 @@ def api_mongodb_health():
         MONGO_USERNAME = os.getenv('MONGO_USERNAME', None)
         MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', None)
         
-        # Build MongoDB URI
+        # Build MongoDB URI with URL-encoded credentials to handle special characters
         if MONGO_USERNAME and MONGO_PASSWORD:
-            mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+            # URL-encode username and password to handle special characters like @, :, etc.
+            encoded_username = quote_plus(MONGO_USERNAME)
+            encoded_password = quote_plus(MONGO_PASSWORD)
+            mongo_uri = f"mongodb://{encoded_username}:{encoded_password}@{MONGO_HOST}:{MONGO_PORT}/"
         else:
             mongo_uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
         

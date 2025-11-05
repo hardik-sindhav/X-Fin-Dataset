@@ -14,6 +14,7 @@ import logging
 from typing import List, Dict, Optional
 import os
 from dotenv import load_dotenv
+from urllib.parse import quote_plus
 
 # Load environment variables
 load_dotenv()
@@ -88,7 +89,10 @@ class NSENewsCollector:
         """Establish MongoDB connection with error handling"""
         try:
             if MONGO_USERNAME and MONGO_PASSWORD:
-                mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+                # URL-encode username and password to handle special characters like @, :, etc.
+                encoded_username = quote_plus(MONGO_USERNAME)
+                encoded_password = quote_plus(MONGO_PASSWORD)
+                mongo_uri = f"mongodb://{encoded_username}:{encoded_password}@{MONGO_HOST}:{MONGO_PORT}/"
             else:
                 mongo_uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
             
