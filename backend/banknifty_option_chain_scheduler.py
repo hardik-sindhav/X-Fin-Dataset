@@ -8,7 +8,8 @@ import time
 import logging
 import threading
 from nse_banknifty_option_chain_collector import NSEBankNiftyOptionChainCollector
-from datetime import datetime, time as dt_time, timedelta
+from datetime import datetime, time as dt_time, timedelta, date
+from scheduler_config import get_config_for_scheduler, is_holiday
 import json
 import os
 
@@ -23,32 +24,56 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Configuration
-START_TIME = dt_time(9, 15)  # 09:15 AM
-END_TIME = dt_time(15, 30)   # 03:30 PM (15:30)
-INTERVAL_MINUTES = 3
+# Load configuration
+def get_scheduler_config():
+    """Get scheduler configuration from config file"""
+    config = get_config_for_scheduler("indices")
+    if config:
+        return config
+    # Fallback to defaults
+    return {
+        "interval_minutes": 3,
+        "start_time": "09:15",
+        "end_time": "15:30",
+        "enabled": True
+    }
 
 STATUS_FILE = 'banknifty_option_chain_scheduler_status.json'
 
 # Execution lock to prevent concurrent runs
 execution_lock = threading.Lock()
 last_run_time = None
-MIN_INTERVAL_SECONDS = INTERVAL_MINUTES * 60 - 10  # Allow 10 seconds buffer
 
 
 def is_market_hours(now: datetime) -> bool:
     """
-    Check if current time is within market hours (09:15 AM to 03:30 PM)
-    and if it's a weekday (Monday-Friday)
+    Check if current time is within market hours
+    and if it's a weekday (Monday-Friday) and not a holiday
     """
+    # Check if it's a holiday
+    if is_holiday(now.date()):
+        return False
+    
     # Check if weekday (Monday=0 to Friday=4)
     if now.weekday() >= 5:  # Saturday or Sunday
         return False
     
+    # Get config
+    config = get_scheduler_config()
+    if not config.get("enabled", True):
+        return False
+    
+    # Parse start and end times from config
+    start_time_str = config.get("start_time", "09:15")
+    end_time_str = config.get("end_time", "15:30")
+    
+    start_time = dt_time(*map(int, start_time_str.split(":")))
+    end_time = dt_time(*map(int, end_time_str.split(":")))
+    
     current_time = now.time()
     
-    # Check if time is between 09:15 and 15:30
-    if current_time < START_TIME or current_time > END_TIME:
+    # Check if time is between start and end
+    if current_time < start_time or current_time > end_time:
         return False
     
     return True
@@ -67,9 +92,9 @@ def run_collector():
     now = datetime.now()
     if last_run_time:
         time_since_last_run = (now - last_run_time).total_seconds()
-        if time_since_last_run < MIN_INTERVAL_SECONDS:
+        if time_since_last_run < min_interval_seconds:
             execution_lock.release()
-            logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {MIN_INTERVAL_SECONDS}s)")
+            logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
             return
     
     collector = None
@@ -125,12 +150,23 @@ def run_collector():
 
 def main():
     """Setup and run the scheduler"""
-    logger.info("Starting NSE BankNifty Option Chain Data Collector Scheduler")
-    logger.info(f"Schedule: Monday to Friday from {START_TIME.strftime('%H:%M')} to {END_TIME.strftime('%H:%M')}, every {INTERVAL_MINUTES} minutes")
+    config = get_scheduler_config()
+    interval = config.get("interval_minutes", 3)
+    start_time = config.get("start_time", "09:15")
+    end_time = config.get("end_time", "15:30")
+    enabled = config.get("enabled", True)
     
-    # Schedule job to run every 3 minutes during weekdays
-    # We'll check market hours inside the run_collector function
-    schedule.every(INTERVAL_MINUTES).minutes.do(run_collector)
+    logger.info("Starting scheduler")
+    logger.info(f"Schedule: Monday to Friday from {start_time} to {end_time}, every {interval} minutes")
+    logger.info(f"Enabled: {enabled}")
+    
+    if not enabled:
+        logger.warning("Scheduler is disabled in configuration")
+        return
+    
+    # Schedule job to run at specified interval
+    # We'll check market hours and holidays inside the run_collector function
+    schedule.every(interval).minutes.do(run_collector)
     
     logger.info("Scheduler configured. Waiting for scheduled times...")
     

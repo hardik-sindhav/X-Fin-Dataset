@@ -7,6 +7,10 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from nse_fiidii_collector import NSEDataCollector
 from nse_option_chain_collector import NSEOptionChainCollector
+from scheduler_config import (
+    get_all_config, get_config_for_scheduler, update_scheduler_config,
+    get_holidays, add_holiday, remove_holiday, is_holiday
+)
 from nse_banknifty_option_chain_collector import NSEBankNiftyOptionChainCollector
 from nse_finnifty_option_chain_collector import NSEFinniftyOptionChainCollector
 from nse_midcpnifty_option_chain_collector import NSEMidcapNiftyOptionChainCollector
@@ -4892,6 +4896,199 @@ def api_livemint_news_trigger():
             "success": success,
             "message": "LiveMint news collection completed" if success else "LiveMint news collection failed"
         })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# ============================================================================
+# Configuration Management API Endpoints
+# ============================================================================
+
+@app.route('/api/config', methods=['GET'])
+@token_required
+def api_get_config():
+    """Get all scheduler configurations"""
+    try:
+        config = get_all_config()
+        return jsonify({
+            "success": True,
+            "config": config
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/config', methods=['POST'])
+@token_required
+def api_update_config():
+    """Update scheduler configuration"""
+    try:
+        data = request.get_json()
+        scheduler_type = data.get('scheduler_type')  # 'banks', 'indices', etc.
+        config_updates = data.get('config', {})
+        
+        if not scheduler_type:
+            return jsonify({
+                "success": False,
+                "error": "scheduler_type is required"
+            }), 400
+        
+        # Validate scheduler type
+        valid_types = ['banks', 'indices', 'gainers_losers', 'news', 'fiidii']
+        if scheduler_type not in valid_types:
+            return jsonify({
+                "success": False,
+                "error": f"Invalid scheduler_type. Must be one of: {', '.join(valid_types)}"
+            }), 400
+        
+        # Validate config updates
+        if 'interval_minutes' in config_updates:
+            try:
+                interval = int(config_updates['interval_minutes'])
+                if interval < 1:
+                    return jsonify({
+                        "success": False,
+                        "error": "interval_minutes must be at least 1"
+                    }), 400
+            except ValueError:
+                return jsonify({
+                    "success": False,
+                    "error": "interval_minutes must be a number"
+                }), 400
+        
+        if 'start_time' in config_updates:
+            try:
+                datetime.strptime(config_updates['start_time'], "%H:%M")
+            except ValueError:
+                return jsonify({
+                    "success": False,
+                    "error": "start_time must be in HH:MM format"
+                }), 400
+        
+        if 'end_time' in config_updates:
+            try:
+                datetime.strptime(config_updates['end_time'], "%H:%M")
+            except ValueError:
+                return jsonify({
+                    "success": False,
+                    "error": "end_time must be in HH:MM format"
+                }), 400
+        
+        if 'enabled' in config_updates:
+            if not isinstance(config_updates['enabled'], bool):
+                return jsonify({
+                    "success": False,
+                    "error": "enabled must be a boolean"
+                }), 400
+        
+        # Update configuration
+        success = update_scheduler_config(scheduler_type, config_updates)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": f"Configuration updated for {scheduler_type}"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to update configuration"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/holidays', methods=['GET'])
+@token_required
+def api_get_holidays():
+    """Get all holidays"""
+    try:
+        holidays = get_holidays()
+        return jsonify({
+            "success": True,
+            "holidays": holidays
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/holidays', methods=['POST'])
+@token_required
+def api_add_holiday():
+    """Add a holiday"""
+    try:
+        data = request.get_json()
+        holiday_date = data.get('date')
+        
+        if not holiday_date:
+            return jsonify({
+                "success": False,
+                "error": "date is required (format: YYYY-MM-DD)"
+            }), 400
+        
+        # Validate date format
+        try:
+            datetime.strptime(holiday_date, "%Y-%m-%d")
+        except ValueError:
+            return jsonify({
+                "success": False,
+                "error": "date must be in YYYY-MM-DD format"
+            }), 400
+        
+        success = add_holiday(holiday_date)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": f"Holiday {holiday_date} added successfully"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to add holiday. Invalid date format."
+            }), 400
+            
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/holidays', methods=['DELETE'])
+@token_required
+def api_remove_holiday():
+    """Remove a holiday"""
+    try:
+        data = request.get_json()
+        holiday_date = data.get('date')
+        
+        if not holiday_date:
+            return jsonify({
+                "success": False,
+                "error": "date is required (format: YYYY-MM-DD)"
+            }), 400
+        
+        success = remove_holiday(holiday_date)
+        
+        return jsonify({
+            "success": True,
+            "message": f"Holiday {holiday_date} removed successfully"
+        })
+            
     except Exception as e:
         return jsonify({
             "success": False,

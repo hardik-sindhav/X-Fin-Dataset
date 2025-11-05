@@ -7,7 +7,8 @@ import schedule
 import time
 import logging
 from nse_fiidii_collector import NSEDataCollector
-from datetime import datetime
+from datetime import datetime, date
+from scheduler_config import get_config_for_scheduler, is_holiday
 import json
 import os
 
@@ -21,14 +22,42 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Load configuration
+def get_scheduler_config():
+    """Get scheduler configuration from config file"""
+    config = get_config_for_scheduler("fiidii")
+    if config:
+        return config
+    # Fallback to defaults
+    return {
+        "interval_minutes": 60,
+        "start_time": "17:00",
+        "end_time": "17:00",
+        "enabled": True
+    }
 
 STATUS_FILE = 'scheduler_status.json'
 
 def run_collector():
     """Execute the NSE data collector"""
+    # Check if it's a holiday
+    now = datetime.now()
+    if is_holiday(now.date()):
+        logger.info(f"Skipping FII/DII collection - holiday: {now.strftime('%Y-%m-%d')}")
+        return
+    
+    # Check if weekday (Monday=0 to Friday=4)
+    if now.weekday() >= 5:  # Saturday or Sunday
+        return
+    
+    # Check if enabled
+    config = get_scheduler_config()
+    if not config.get("enabled", True):
+        return
+    
     collector = None
     try:
-        # Cronjob triggered at {datetime.now()}
+        logger.info(f"FII/DII Cronjob triggered at {now}")
         
         collector = NSEDataCollector()
         success = collector.collect_and_save()
@@ -63,15 +92,24 @@ def run_collector():
 
 def main():
     """Setup and run the scheduler"""
-    # Starting NSE FII/DII Data Collector Scheduler
-    # Schedule: Monday to Friday at 5:00 PM (17:00)
+    config = get_scheduler_config()
+    start_time = config.get("start_time", "17:00")
+    enabled = config.get("enabled", True)
     
-    # Schedule job for Monday to Friday at 5:00 PM
-    schedule.every().monday.at("17:00").do(run_collector)
-    schedule.every().tuesday.at("17:00").do(run_collector)
-    schedule.every().wednesday.at("17:00").do(run_collector)
-    schedule.every().thursday.at("17:00").do(run_collector)
-    schedule.every().friday.at("17:00").do(run_collector)
+    logger.info("Starting NSE FII/DII Data Collector Scheduler")
+    logger.info(f"Schedule: Monday to Friday at {start_time}")
+    logger.info(f"Enabled: {enabled}")
+    
+    if not enabled:
+        logger.warning("Scheduler is disabled in configuration")
+        return
+    
+    # Schedule job for Monday to Friday at configured time
+    schedule.every().monday.at(start_time).do(run_collector)
+    schedule.every().tuesday.at(start_time).do(run_collector)
+    schedule.every().wednesday.at(start_time).do(run_collector)
+    schedule.every().thursday.at(start_time).do(run_collector)
+    schedule.every().friday.at(start_time).do(run_collector)
     
     # Scheduler configured. Waiting for scheduled time...
     
