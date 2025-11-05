@@ -3,7 +3,7 @@ name: 🚀 Deploy to VPS
 on:
   push:
     branches:
-      - main  # change if your main branch name is different
+      - main
 
 jobs:
   deploy:
@@ -27,45 +27,48 @@ jobs:
       - name: Deploy via SSH
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
-          set -e
-          echo "🚀 Starting deployment on VPS..."
+            set -e
+            echo "🚀 Deploying to VPS..."
 
-          # Go to or create the deployment folder
-          mkdir -p /var/www/xfinai
-          cd /var/www/xfinai
+            # create deployment folder if missing
+            mkdir -p /var/www/xfinai
+            cd /var/www/xfinai
 
-          # Clone repo if not exists
-          if [ ! -d ".git" ]; then
-            git clone https://github.com/hardik-sindhav/X-Fin-Dataset.git .
-          fi
+            # clone only once (first deploy)
+            if [ ! -d ".git" ]; then
+              echo "Cloning repo (first time only)..."
+              git clone git@github.com:hardik-sindhav/X-Fin-Dataset.git .
+            fi
 
-          echo "📦 Pulling latest changes..."
-          git reset --hard
-          git pull origin main
+            echo "📦 Pulling latest changes..."
+            git reset --hard
+            git pull origin main
 
-          echo "📦 Installing backend dependencies..."
-          cd backend
-          python3 -m venv venv || true
-          source venv/bin/activate
-          pip install -U pip
-          pip install -r requirements.txt
-          deactivate
-          cd ..
+            echo "🧠 Restarting backend + cron job..."
+            pkill -f admin_panel.py || true
 
-          echo "🧠 Restarting backend + cron job..."
-          pkill -f admin_panel.py || true
-          cd backend
-          nohup python3 admin_panel.py > /var/www/xfinai/backend.log 2>&1 &
+            cd backend
+            python3 -m venv venv || true
+            source venv/bin/activate
+            pip install -U pip
+            pip install -r requirements.txt
+            deactivate
+            cd ..
 
-          echo "⚙️ Building frontend..."
-          cd ../frontend
-          npm install --legacy-peer-deps
-          npm run build
+            echo "⚙️ Building frontend..."
+            cd frontend
+            npm install --legacy-peer-deps
+            npm run build
+            cd ..
 
-          echo "⚙️ Building admin frontend..."
-          cd ../frontend-admin
-          npm install --legacy-peer-deps
-          npm run build
+            echo "⚙️ Building admin frontend..."
+            cd frontend-admin
+            npm install --legacy-peer-deps
+            npm run build
+            cd ..
 
-          echo "✅ Deployment complete!"
+            echo "🚀 Starting backend (background)..."
+            nohup python3 backend/admin_panel.py > /var/www/xfinai/backend.log 2>&1 &
+
+            echo "✅ Deployment complete!"
           EOF
