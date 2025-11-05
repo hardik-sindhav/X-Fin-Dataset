@@ -3,15 +3,15 @@ name: 🚀 Deploy to VPS
 on:
   push:
     branches:
-      - main  # or master if that’s your default branch
+      - main  # or master if your main branch is named differently
 
 jobs:
   deploy:
-    name: Deploy App to VPS
     runs-on: ubuntu-latest
+    name: Deploy on VPS
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Setup SSH
@@ -29,36 +29,40 @@ jobs:
           set -e
           echo "🚀 Starting deployment on VPS..."
 
-          # Go to your deployment folder (or create if not exists)
+          # Go to or create the deployment folder
           mkdir -p /var/www/xfinai
           cd /var/www/xfinai
 
-          # Clone if not already
+          # Clone repo if not exists
           if [ ! -d ".git" ]; then
             git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git .
           fi
 
           git pull origin main
 
-          echo "🔧 Backend setup..."
+          echo "📦 Installing backend dependencies..."
           cd backend
           python3 -m venv venv
           source venv/bin/activate
-          pip install -r requirements.txt || true
+          pip install -r requirements.txt
           deactivate
           cd ..
 
-          echo "⚙️ Frontend build..."
-          cd frontend
+          echo "🧠 Restarting backend + cron job..."
+          # Kill any old running instance of admin_panel.py
+          pkill -f admin_panel.py || true
+          cd backend
+          nohup python3 admin_panel.py > /var/www/xfinai/backend.log 2>&1 &
+
+          echo "⚙️ Building frontend..."
+          cd ../frontend
           npm install
           npm run build
-          cd ..
 
-          echo "⚙️ Frontend Admin build..."
-          cd frontend-admin
+          echo "⚙️ Building admin frontend..."
+          cd ../frontend-admin
           npm install
           npm run build
-          cd ..
 
-          echo "✅ Deployment completed successfully!"
+          echo "✅ Deployment complete!"
           EOF
