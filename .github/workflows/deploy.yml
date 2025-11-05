@@ -1,0 +1,86 @@
+cat > ~/apps/xfinai/deploy.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ====== Config ======
+REPO_DIR="$HOME/apps/xfinai/repo"
+GIT_URL="https://github.com/hardik-sindhav/X-Fin-Dataset.git"
+BRANCH=${1:-main}
+# Where frontend builds will be served from by nginx
+FRONTEND_WEBROOT="/var/www/xfinai-frontend"
+ADMIN_WEBROOT="/var/www/xfinai-admin"
+# Backend systemd service name (to be created)
+BACKEND_SERVICE="xfinai-backend.service"
+# =====================
+
+echo "Starting deploy: branch=$BRANCH"
+
+# Ensure repo dir exists
+mkdir -p "$REPO_DIR"
+cd "$REPO_DIR"
+
+if [ ! -d .git ]; then
+  echo "Cloning repository..."
+  git clone "$GIT_URL" . || { echo "Clone failed"; exit 1; }
+  git checkout "$BRANCH"
+else
+  echo "Fetching latest from origin/$BRANCH..."
+  git fetch origin
+  git reset --hard origin/"$BRANCH"
+fi
+
+# -------- BACKEND --------
+echo "Deploying backend..."
+cd "$REPO_DIR/backend"
+
+# create venv if not exists
+if [ ! -d venv ]; then
+  python3 -m venv venv
+fi
+source venv/bin/activate
+pip install --upgrade pip
+if [ -f requirements.txt ]; then
+  pip install -r requirements.txt
+fi
+
+# If you need migrations or other commands, add them here, e.g.
+# python manage.py migrate
+
+# Restart backend systemd service if exists
+if sudo systemctl list-units --full -all | grep -q "$BACKEND_SERVICE"; then
+  echo "Restarting $BACKEND_SERVICE..."
+  sudo systemctl restart "$BACKEND_SERVICE"
+else
+  echo "Warning: $BACKEND_SERVICE not found. Make sure systemd service exists."
+fi
+
+# -------- FRONTEND --------
+echo "Building frontend..."
+cd "$REPO_DIR/frontend"
+npm ci
+npm run build
+
+echo "Copying frontend build to $FRONTEND_WEBROOT..."
+sudo rm -rf "$FRONTEND_WEBROOT"
+sudo mkdir -p "$FRONTEND_WEBROOT"
+sudo cp -r build/* "$FRONTEND_WEBROOT/"
+
+# -------- FRONTEND-ADMIN --------
+echo "Building frontend-admin..."
+cd "$REPO_DIR/frontend-admin"
+npm ci
+npm run build
+
+echo "Copying admin build to $ADMIN_WEBROOT..."
+sudo rm -rf "$ADMIN_WEBROOT"
+sudo mkdir -p "$ADMIN_WEBROOT"
+sudo cp -r build/* "$ADMIN_WEBROOT/"
+
+# Reload nginx so new files are served
+echo "Reloading nginx..."
+sudo systemctl reload nginx
+
+echo "Deploy finished successfully."
+EOF
+
+chmod +x ~/apps/xfinai/deploy.sh

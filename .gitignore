@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Status files
+*_status.json
+scheduler_status.json
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Frontend build (keep dist for deployment)
+# dist/  # Commented out - we need dist for deployment
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SSH keys
+*.pem
+*.key
+id_rsa*
+github_deploy*
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+
+# MongoDB
+*.bson
+*.dump
+
+# PM2
+.pm2/
+
+# Backup files
+*.bak
+*.backup
+
