@@ -46,7 +46,27 @@ from functools import wraps
 from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for React frontend
+
+# Configure CORS to allow requests from frontend domain
+# Default: allow all origins (can be restricted via CORS_ORIGINS env var)
+allowed_origins_env = os.getenv('CORS_ORIGINS', '')
+if allowed_origins_env:
+    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(',')]
+    CORS(app, 
+         resources={r"/api/*": {
+             "origins": allowed_origins,
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+             "allow_headers": ["Content-Type", "Authorization"],
+             "supports_credentials": True
+         }})
+else:
+    # Allow all origins (for development and cross-domain requests)
+    CORS(app, 
+         resources={r"/api/*": {
+             "origins": "*",
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+             "allow_headers": ["Content-Type", "Authorization"]
+         }})
 
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
