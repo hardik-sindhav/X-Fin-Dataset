@@ -90,20 +90,22 @@ def run_collector():
     
     # Check minimum interval
     now = datetime.now()
-    if last_run_time:
-        time_since_last_run = (now - last_run_time).total_seconds()
-        if time_since_last_run < min_interval_seconds:
-            execution_lock.release()
-            logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
-            return
+    config = get_scheduler_config()
+    interval_minutes = config.get("interval_minutes", 3)
+    min_interval_seconds = interval_minutes * 60 - 10  # Allow 10 seconds buffer
     
     collector = None
+    lock_acquired = True
     try:
+        if last_run_time:
+            time_since_last_run = (now - last_run_time).total_seconds()
+            if time_since_last_run < min_interval_seconds:
+                logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
+                return
         
         # Check if it's market hours before running
         if not is_market_hours(now):
             logger.info(f"Outside market hours. Current time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-            execution_lock.release()
             return
         
         logger.info("=" * 60)
@@ -149,7 +151,8 @@ def run_collector():
     finally:
         if collector:
             collector.close()
-        execution_lock.release()
+        if lock_acquired:
+            execution_lock.release()
         logger.info("=" * 60)
 
 

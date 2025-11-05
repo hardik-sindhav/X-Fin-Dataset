@@ -16,28 +16,26 @@ import {
   MessageCircle,
   Menu,
   X,
-  Home,
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Trash2,
+  Filter,
+  Calendar
 } from 'lucide-react'
-import HomePage from './components/HomePage'
 import Login from './components/Login'
-import Footer from './components/Footer'
-import Pricing from './components/Pricing'
 import Settings from './components/Settings'
+import DetailView from './components/DetailView'
 import './App.css'
 
-const API_BASE = '/api'
+const API_BASE = 'https://api.xfinai.cloud/api'
 
 function App() {
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authToken, setAuthToken] = useState(null)
   const [username, setUsername] = useState('')
-  const [showHome, setShowHome] = useState(true) // Start with home page
-  const [showPricing, setShowPricing] = useState(false) // Pricing page
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'gainers', 'losers', 'news', or 'livemint-news'
   
@@ -50,81 +48,97 @@ function App() {
   const [optionChainStatus, setOptionChainStatus] = useState(null)
   const [optionChainData, setOptionChainData] = useState([])
   const [optionChainStats, setOptionChainStats] = useState(null)
+  const [optionChainExpiry, setOptionChainExpiry] = useState(null)
   
   // BankNifty state
   const [bankniftyStatus, setBankniftyStatus] = useState(null)
   const [bankniftyData, setBankniftyData] = useState([])
   const [bankniftyStats, setBankniftyStats] = useState(null)
+  const [bankniftyExpiry, setBankniftyExpiry] = useState(null)
   
   // Finnifty state
   const [finniftyStatus, setFinniftyStatus] = useState(null)
   const [finniftyData, setFinniftyData] = useState([])
   const [finniftyStats, setFinniftyStats] = useState(null)
+  const [finniftyExpiry, setFinniftyExpiry] = useState(null)
   
   // MidcapNifty state
   const [midcpniftyStatus, setMidcpniftyStatus] = useState(null)
   const [midcpniftyData, setMidcpniftyData] = useState([])
   const [midcpniftyStats, setMidcpniftyStats] = useState(null)
+  const [midcpniftyExpiry, setMidcpniftyExpiry] = useState(null)
   
   // HDFC Bank state
   const [hdfcbankStatus, setHdfcbankStatus] = useState(null)
   const [hdfcbankData, setHdfcbankData] = useState([])
   const [hdfcbankStats, setHdfcbankStats] = useState(null)
+  const [hdfcbankExpiry, setHdfcbankExpiry] = useState(null)
   
   // ICICI Bank state
   const [icicibankStatus, setIcicibankStatus] = useState(null)
   const [icicibankData, setIcicibankData] = useState([])
   const [icicibankStats, setIcicibankStats] = useState(null)
+  const [icicibankExpiry, setIcicibankExpiry] = useState(null)
   
   // SBIN state
   const [sbinStatus, setSbinStatus] = useState(null)
   const [sbinData, setSbinData] = useState([])
   const [sbinStats, setSbinStats] = useState(null)
+  const [sbinExpiry, setSbinExpiry] = useState(null)
   
   // Kotak Bank state
   const [kotakbankStatus, setKotakbankStatus] = useState(null)
   const [kotakbankData, setKotakbankData] = useState([])
   const [kotakbankStats, setKotakbankStats] = useState(null)
+  const [kotakbankExpiry, setKotakbankExpiry] = useState(null)
   
   // Axis Bank state
   const [axisbankStatus, setAxisbankStatus] = useState(null)
   const [axisbankData, setAxisbankData] = useState([])
   const [axisbankStats, setAxisbankStats] = useState(null)
+  const [axisbankExpiry, setAxisbankExpiry] = useState(null)
   
   // Bank of Baroda state
   const [bankbarodaStatus, setBankbarodaStatus] = useState(null)
   const [bankbarodaData, setBankbarodaData] = useState([])
   const [bankbarodaStats, setBankbarodaStats] = useState(null)
+  const [bankbarodaExpiry, setBankbarodaExpiry] = useState(null)
   
   // PNB state
   const [pnbStatus, setPnbStatus] = useState(null)
   const [pnbData, setPnbData] = useState([])
   const [pnbStats, setPnbStats] = useState(null)
+  const [pnbExpiry, setPnbExpiry] = useState(null)
   
   // CANBK state
   const [canbkStatus, setCanbkStatus] = useState(null)
   const [canbkData, setCanbkData] = useState([])
   const [canbkStats, setCanbkStats] = useState(null)
+  const [canbkExpiry, setCanbkExpiry] = useState(null)
   
   // AUBANK state
   const [aubankStatus, setAubankStatus] = useState(null)
   const [aubankData, setAubankData] = useState([])
   const [aubankStats, setAubankStats] = useState(null)
+  const [aubankExpiry, setAubankExpiry] = useState(null)
   
   // INDUSINDBK state
   const [indusindbkStatus, setIndusindbkStatus] = useState(null)
   const [indusindbkData, setIndusindbkData] = useState([])
   const [indusindbkStats, setIndusindbkStats] = useState(null)
+  const [indusindbkExpiry, setIndusindbkExpiry] = useState(null)
   
   // IDFCFIRSTB state
   const [idfcfirstbStatus, setIdfcfirstbStatus] = useState(null)
   const [idfcfirstbData, setIdfcfirstbData] = useState([])
   const [idfcfirstbStats, setIdfcfirstbStats] = useState(null)
+  const [idfcfirstbExpiry, setIdfcfirstbExpiry] = useState(null)
   
   // FEDERALBNK state
   const [federalbnkStatus, setFederalbnkStatus] = useState(null)
   const [federalbnkData, setFederalbnkData] = useState([])
   const [federalbnkStats, setFederalbnkStats] = useState(null)
+  const [federalbnkExpiry, setFederalbnkExpiry] = useState(null)
   
   // News state
   const [newsStatus, setNewsStatus] = useState(null)
@@ -175,9 +189,16 @@ function App() {
   const [losersTriggering, setLosersTriggering] = useState(false)
   const [newsTriggering, setNewsTriggering] = useState(false)
   const [livemintNewsTriggering, setLivemintNewsTriggering] = useState(false)
+  
+  // Date filters for each tab
+  const [dateFilters, setDateFilters] = useState({})
+  
+  // Selected record for detail view
+  const [selectedRecord, setSelectedRecord] = useState(null)
+  const [selectedTabName, setSelectedTabName] = useState(null)
 
   // Fetch data for a specific tab only if not already loaded
-  const fetchTabData = async (tabName, forceRefresh = false, page = 1) => {
+  const fetchTabData = async (tabName, forceRefresh = false, page = 1, startDate = null, endDate = null) => {
     setLoadingTab(tabName)
 
     try {
@@ -185,9 +206,12 @@ function App() {
       
       switch (tabName) {
         case 'fiidii':
+          let dataUrl = `${API_BASE}/data?page=${page}&limit=${limit}`
+          if (startDate) dataUrl += `&start_date=${startDate}`
+          if (endDate) dataUrl += `&end_date=${endDate}`
           const [statusRes, dataRes, statsRes] = await Promise.all([
             axios.get(`${API_BASE}/status`),
-            axios.get(`${API_BASE}/data?page=${page}&limit=${limit}`),
+            axios.get(dataUrl),
             axios.get(`${API_BASE}/stats`)
           ])
           setStatus(statusRes.data)
@@ -207,14 +231,19 @@ function App() {
           break
 
         case 'option-chain':
-          const [optStatusRes, optDataRes, optStatsRes] = await Promise.all([
+          let optDataUrl = `${API_BASE}/option-chain/data?page=${page}&limit=${limit}`
+          if (startDate) optDataUrl += `&start_date=${startDate}`
+          if (endDate) optDataUrl += `&end_date=${endDate}`
+          const [optStatusRes, optDataRes, optStatsRes, optExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/option-chain/status`),
-            axios.get(`${API_BASE}/option-chain/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/option-chain/stats`)
+            axios.get(optDataUrl),
+            axios.get(`${API_BASE}/option-chain/stats`),
+            axios.get(`${API_BASE}/option-chain/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setOptionChainStatus(optStatusRes.data)
           setOptionChainData(optDataRes.data.data || [])
           setOptionChainStats(optStatsRes.data.stats)
+          setOptionChainExpiry(optExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -228,14 +257,19 @@ function App() {
           break
 
         case 'banknifty':
-          const [bnStatusRes, bnDataRes, bnStatsRes] = await Promise.all([
+          let bnDataUrl = `${API_BASE}/banknifty/data?page=${page}&limit=${limit}`
+          if (startDate) bnDataUrl += `&start_date=${startDate}`
+          if (endDate) bnDataUrl += `&end_date=${endDate}`
+          const [bnStatusRes, bnDataRes, bnStatsRes, bnExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/banknifty/status`),
-            axios.get(`${API_BASE}/banknifty/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/banknifty/stats`)
+            axios.get(bnDataUrl),
+            axios.get(`${API_BASE}/banknifty/stats`),
+            axios.get(`${API_BASE}/banknifty/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setBankniftyStatus(bnStatusRes.data)
           setBankniftyData(bnDataRes.data.data || [])
           setBankniftyStats(bnStatsRes.data.stats)
+          setBankniftyExpiry(bnExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -249,14 +283,19 @@ function App() {
           break
 
         case 'finnifty':
-          const [fnStatusRes, fnDataRes, fnStatsRes] = await Promise.all([
+          let fnDataUrl = `${API_BASE}/finnifty/data?page=${page}&limit=${limit}`
+          if (startDate) fnDataUrl += `&start_date=${startDate}`
+          if (endDate) fnDataUrl += `&end_date=${endDate}`
+          const [fnStatusRes, fnDataRes, fnStatsRes, fnExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/finnifty/status`),
-            axios.get(`${API_BASE}/finnifty/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/finnifty/stats`)
+            axios.get(fnDataUrl),
+            axios.get(`${API_BASE}/finnifty/stats`),
+            axios.get(`${API_BASE}/finnifty/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setFinniftyStatus(fnStatusRes.data)
           setFinniftyData(fnDataRes.data.data || [])
           setFinniftyStats(fnStatsRes.data.stats)
+          setFinniftyExpiry(fnExpiryRes.data.expiry || null)
           // Update pagination state
           setPagination(prev => ({
             ...prev,
@@ -271,14 +310,19 @@ function App() {
           break
 
         case 'midcpnifty':
-          const [midcpStatusRes, midcpDataRes, midcpStatsRes] = await Promise.all([
+          let midcpDataUrl = `${API_BASE}/midcpnifty/data?page=${page}&limit=${limit}`
+          if (startDate) midcpDataUrl += `&start_date=${startDate}`
+          if (endDate) midcpDataUrl += `&end_date=${endDate}`
+          const [midcpStatusRes, midcpDataRes, midcpStatsRes, midcpExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/midcpnifty/status`),
-            axios.get(`${API_BASE}/midcpnifty/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/midcpnifty/stats`)
+            axios.get(midcpDataUrl),
+            axios.get(`${API_BASE}/midcpnifty/stats`),
+            axios.get(`${API_BASE}/midcpnifty/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setMidcpniftyStatus(midcpStatusRes.data)
           setMidcpniftyData(midcpDataRes.data.data || [])
           setMidcpniftyStats(midcpStatsRes.data.stats)
+          setMidcpniftyExpiry(midcpExpiryRes.data.expiry || null)
           // Update pagination state
           setPagination(prev => ({
             ...prev,
@@ -293,14 +337,19 @@ function App() {
           break
 
         case 'hdfcbank':
-          const [hdfcStatusRes, hdfcDataRes, hdfcStatsRes] = await Promise.all([
+          let hdfcDataUrl = `${API_BASE}/hdfcbank/data?page=${page}&limit=${limit}`
+          if (startDate) hdfcDataUrl += `&start_date=${startDate}`
+          if (endDate) hdfcDataUrl += `&end_date=${endDate}`
+          const [hdfcStatusRes, hdfcDataRes, hdfcStatsRes, hdfcExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/hdfcbank/status`),
-            axios.get(`${API_BASE}/hdfcbank/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/hdfcbank/stats`)
+            axios.get(hdfcDataUrl),
+            axios.get(`${API_BASE}/hdfcbank/stats`),
+            axios.get(`${API_BASE}/hdfcbank/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setHdfcbankStatus(hdfcStatusRes.data)
           setHdfcbankData(hdfcDataRes.data.data || [])
           setHdfcbankStats(hdfcStatsRes.data.stats)
+          setHdfcbankExpiry(hdfcExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -314,14 +363,19 @@ function App() {
           break
 
         case 'icicibank':
-          const [iciciStatusRes, iciciDataRes, iciciStatsRes] = await Promise.all([
+          let iciciDataUrl = `${API_BASE}/icicibank/data?page=${page}&limit=${limit}`
+          if (startDate) iciciDataUrl += `&start_date=${startDate}`
+          if (endDate) iciciDataUrl += `&end_date=${endDate}`
+          const [iciciStatusRes, iciciDataRes, iciciStatsRes, iciciExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/icicibank/status`),
-            axios.get(`${API_BASE}/icicibank/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/icicibank/stats`)
+            axios.get(iciciDataUrl),
+            axios.get(`${API_BASE}/icicibank/stats`),
+            axios.get(`${API_BASE}/icicibank/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setIcicibankStatus(iciciStatusRes.data)
           setIcicibankData(iciciDataRes.data.data || [])
           setIcicibankStats(iciciStatsRes.data.stats)
+          setIcicibankExpiry(iciciExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -335,14 +389,19 @@ function App() {
           break
 
         case 'sbin':
-          const [sbinStatusRes, sbinDataRes, sbinStatsRes] = await Promise.all([
+          let sbinDataUrl = `${API_BASE}/sbin/data?page=${page}&limit=${limit}`
+          if (startDate) sbinDataUrl += `&start_date=${startDate}`
+          if (endDate) sbinDataUrl += `&end_date=${endDate}`
+          const [sbinStatusRes, sbinDataRes, sbinStatsRes, sbinExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/sbin/status`),
-            axios.get(`${API_BASE}/sbin/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/sbin/stats`)
+            axios.get(sbinDataUrl),
+            axios.get(`${API_BASE}/sbin/stats`),
+            axios.get(`${API_BASE}/sbin/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setSbinStatus(sbinStatusRes.data)
           setSbinData(sbinDataRes.data.data || [])
           setSbinStats(sbinStatsRes.data.stats)
+          setSbinExpiry(sbinExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -356,14 +415,19 @@ function App() {
           break
 
         case 'kotakbank':
-          const [kotakStatusRes, kotakDataRes, kotakStatsRes] = await Promise.all([
+          let kotakDataUrl = `${API_BASE}/kotakbank/data?page=${page}&limit=${limit}`
+          if (startDate) kotakDataUrl += `&start_date=${startDate}`
+          if (endDate) kotakDataUrl += `&end_date=${endDate}`
+          const [kotakStatusRes, kotakDataRes, kotakStatsRes, kotakExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/kotakbank/status`),
-            axios.get(`${API_BASE}/kotakbank/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/kotakbank/stats`)
+            axios.get(kotakDataUrl),
+            axios.get(`${API_BASE}/kotakbank/stats`),
+            axios.get(`${API_BASE}/kotakbank/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setKotakbankStatus(kotakStatusRes.data)
           setKotakbankData(kotakDataRes.data.data || [])
           setKotakbankStats(kotakStatsRes.data.stats)
+          setKotakbankExpiry(kotakExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -377,14 +441,19 @@ function App() {
           break
 
         case 'axisbank':
-          const [axisStatusRes, axisDataRes, axisStatsRes] = await Promise.all([
+          let axisDataUrl = `${API_BASE}/axisbank/data?page=${page}&limit=${limit}`
+          if (startDate) axisDataUrl += `&start_date=${startDate}`
+          if (endDate) axisDataUrl += `&end_date=${endDate}`
+          const [axisStatusRes, axisDataRes, axisStatsRes, axisExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/axisbank/status`),
-            axios.get(`${API_BASE}/axisbank/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/axisbank/stats`)
+            axios.get(axisDataUrl),
+            axios.get(`${API_BASE}/axisbank/stats`),
+            axios.get(`${API_BASE}/axisbank/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setAxisbankStatus(axisStatusRes.data)
           setAxisbankData(axisDataRes.data.data || [])
           setAxisbankStats(axisStatsRes.data.stats)
+          setAxisbankExpiry(axisExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -398,14 +467,19 @@ function App() {
           break
 
         case 'bankbaroda':
-          const [bbStatusRes, bbDataRes, bbStatsRes] = await Promise.all([
+          let bbDataUrl = `${API_BASE}/bankbaroda/data?page=${page}&limit=${limit}`
+          if (startDate) bbDataUrl += `&start_date=${startDate}`
+          if (endDate) bbDataUrl += `&end_date=${endDate}`
+          const [bbStatusRes, bbDataRes, bbStatsRes, bbExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/bankbaroda/status`),
-            axios.get(`${API_BASE}/bankbaroda/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/bankbaroda/stats`)
+            axios.get(bbDataUrl),
+            axios.get(`${API_BASE}/bankbaroda/stats`),
+            axios.get(`${API_BASE}/bankbaroda/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setBankbarodaStatus(bbStatusRes.data)
           setBankbarodaData(bbDataRes.data.data || [])
           setBankbarodaStats(bbStatsRes.data.stats)
+          setBankbarodaExpiry(bbExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -419,14 +493,19 @@ function App() {
           break
 
         case 'pnb':
-          const [pnbStatusRes, pnbDataRes, pnbStatsRes] = await Promise.all([
+          let pnbDataUrl = `${API_BASE}/pnb/data?page=${page}&limit=${limit}`
+          if (startDate) pnbDataUrl += `&start_date=${startDate}`
+          if (endDate) pnbDataUrl += `&end_date=${endDate}`
+          const [pnbStatusRes, pnbDataRes, pnbStatsRes, pnbExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/pnb/status`),
-            axios.get(`${API_BASE}/pnb/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/pnb/stats`)
+            axios.get(pnbDataUrl),
+            axios.get(`${API_BASE}/pnb/stats`),
+            axios.get(`${API_BASE}/pnb/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setPnbStatus(pnbStatusRes.data)
           setPnbData(pnbDataRes.data.data || [])
           setPnbStats(pnbStatsRes.data.stats)
+          setPnbExpiry(pnbExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -440,14 +519,19 @@ function App() {
           break
 
         case 'canbk':
-          const [canbkStatusRes, canbkDataRes, canbkStatsRes] = await Promise.all([
+          let canbkDataUrl = `${API_BASE}/canbk/data?page=${page}&limit=${limit}`
+          if (startDate) canbkDataUrl += `&start_date=${startDate}`
+          if (endDate) canbkDataUrl += `&end_date=${endDate}`
+          const [canbkStatusRes, canbkDataRes, canbkStatsRes, canbkExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/canbk/status`),
-            axios.get(`${API_BASE}/canbk/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/canbk/stats`)
+            axios.get(canbkDataUrl),
+            axios.get(`${API_BASE}/canbk/stats`),
+            axios.get(`${API_BASE}/canbk/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setCanbkStatus(canbkStatusRes.data)
           setCanbkData(canbkDataRes.data.data || [])
           setCanbkStats(canbkStatsRes.data.stats)
+          setCanbkExpiry(canbkExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -461,14 +545,19 @@ function App() {
           break
 
         case 'aubank':
-          const [aubankStatusRes, aubankDataRes, aubankStatsRes] = await Promise.all([
+          let aubankDataUrl = `${API_BASE}/aubank/data?page=${page}&limit=${limit}`
+          if (startDate) aubankDataUrl += `&start_date=${startDate}`
+          if (endDate) aubankDataUrl += `&end_date=${endDate}`
+          const [aubankStatusRes, aubankDataRes, aubankStatsRes, aubankExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/aubank/status`),
-            axios.get(`${API_BASE}/aubank/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/aubank/stats`)
+            axios.get(aubankDataUrl),
+            axios.get(`${API_BASE}/aubank/stats`),
+            axios.get(`${API_BASE}/aubank/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setAubankStatus(aubankStatusRes.data)
           setAubankData(aubankDataRes.data.data || [])
           setAubankStats(aubankStatsRes.data.stats)
+          setAubankExpiry(aubankExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -482,14 +571,19 @@ function App() {
           break
 
         case 'indusindbk':
-          const [indusindStatusRes, indusindDataRes, indusindStatsRes] = await Promise.all([
+          let indusindDataUrl = `${API_BASE}/indusindbk/data?page=${page}&limit=${limit}`
+          if (startDate) indusindDataUrl += `&start_date=${startDate}`
+          if (endDate) indusindDataUrl += `&end_date=${endDate}`
+          const [indusindStatusRes, indusindDataRes, indusindStatsRes, indusindExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/indusindbk/status`),
-            axios.get(`${API_BASE}/indusindbk/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/indusindbk/stats`)
+            axios.get(indusindDataUrl),
+            axios.get(`${API_BASE}/indusindbk/stats`),
+            axios.get(`${API_BASE}/indusindbk/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setIndusindbkStatus(indusindStatusRes.data)
           setIndusindbkData(indusindDataRes.data.data || [])
           setIndusindbkStats(indusindStatsRes.data.stats)
+          setIndusindbkExpiry(indusindExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -503,14 +597,19 @@ function App() {
           break
 
         case 'idfcfirstb':
-          const [idfcStatusRes, idfcDataRes, idfcStatsRes] = await Promise.all([
+          let idfcDataUrl = `${API_BASE}/idfcfirstb/data?page=${page}&limit=${limit}`
+          if (startDate) idfcDataUrl += `&start_date=${startDate}`
+          if (endDate) idfcDataUrl += `&end_date=${endDate}`
+          const [idfcStatusRes, idfcDataRes, idfcStatsRes, idfcExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/idfcfirstb/status`),
-            axios.get(`${API_BASE}/idfcfirstb/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/idfcfirstb/stats`)
+            axios.get(idfcDataUrl),
+            axios.get(`${API_BASE}/idfcfirstb/stats`),
+            axios.get(`${API_BASE}/idfcfirstb/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setIdfcfirstbStatus(idfcStatusRes.data)
           setIdfcfirstbData(idfcDataRes.data.data || [])
           setIdfcfirstbStats(idfcStatsRes.data.stats)
+          setIdfcfirstbExpiry(idfcExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -524,14 +623,19 @@ function App() {
           break
 
         case 'federalbnk':
-          const [federalStatusRes, federalDataRes, federalStatsRes] = await Promise.all([
+          let federalDataUrl = `${API_BASE}/federalbnk/data?page=${page}&limit=${limit}`
+          if (startDate) federalDataUrl += `&start_date=${startDate}`
+          if (endDate) federalDataUrl += `&end_date=${endDate}`
+          const [federalStatusRes, federalDataRes, federalStatsRes, federalExpiryRes] = await Promise.all([
             axios.get(`${API_BASE}/federalbnk/status`),
-            axios.get(`${API_BASE}/federalbnk/data?page=${page}&limit=${limit}`),
-            axios.get(`${API_BASE}/federalbnk/stats`)
+            axios.get(federalDataUrl),
+            axios.get(`${API_BASE}/federalbnk/stats`),
+            axios.get(`${API_BASE}/federalbnk/expiry`).catch(() => ({ data: { success: false, expiry: null } }))
           ])
           setFederalbnkStatus(federalStatusRes.data)
           setFederalbnkData(federalDataRes.data.data || [])
           setFederalbnkStats(federalStatsRes.data.stats)
+          setFederalbnkExpiry(federalExpiryRes.data.expiry || null)
           setPagination(prev => ({
             ...prev,
             [tabName]: {
@@ -662,7 +766,8 @@ function App() {
 
     const handlePageChange = (newPage) => {
       if (newPage >= 1 && newPage <= paginationData.total_pages) {
-        fetchTabData(tabName, true, newPage)
+        const filter = dateFilters[tabName] || {}
+        fetchTabData(tabName, true, newPage, filter.startDate || null, filter.endDate || null)
       }
     }
 
@@ -712,27 +817,6 @@ function App() {
     }
   }, [authToken])
 
-  // Handle hash change for pricing page
-  useEffect(() => {
-    const handleHashChange = () => {
-      if (window.location.hash === '#pricing') {
-        setShowPricing(true)
-        setShowHome(true) // Keep home true so header/footer stay
-      } else if (window.location.hash === '' || window.location.hash === '#home') {
-        setShowPricing(false)
-        setShowHome(true)
-      }
-    }
-    
-    window.addEventListener('hashchange', handleHashChange)
-    // Check initial hash
-    if (window.location.hash === '#pricing') {
-      setShowPricing(true)
-      setShowHome(true)
-    }
-    
-    return () => window.removeEventListener('hashchange', handleHashChange)
-  }, [])
 
   // Verify token validity
   const verifyToken = async (token, storedUsername) => {
@@ -767,9 +851,13 @@ function App() {
     setUsername(user)
     setIsAuthenticated(true)
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
-    // After login, if user was trying to access a specific tab, navigate to it
-    if (activeTab && !showHome) {
+    // After login, go directly to dashboard
+    if (activeTab) {
       fetchTabData(activeTab)
+    } else {
+      // Default to FII/DII tab
+      setActiveTab('fiidii')
+      fetchTabData('fiidii')
     }
   }
 
@@ -784,7 +872,6 @@ function App() {
     localStorage.removeItem('username')
     setIsAuthenticated(false)
     setAuthToken(null)
-    setShowHome(true)
     setShowLogoutDialog(false)
     delete axios.defaults.headers.common['Authorization']
   }
@@ -1195,106 +1282,92 @@ function App() {
     return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
-  // Handle navigation from home page - check auth first
-  const handleHomeNavigation = (tabName) => {
-    // If trying to access dashboard without auth, show login
-    if (!isAuthenticated) {
-      // Store the target tab to navigate after login
-      setActiveTab(tabName)
-      setShowHome(false)
-      setShowPricing(false)
+  // Handle delete record
+  const handleDeleteRecord = async (recordId, tabName) => {
+    if (!window.confirm('Are you sure you want to delete this record? This action cannot be undone.')) {
       return
     }
-    // If authenticated, navigate to dashboard
-    setShowHome(false)
-    setShowPricing(false)
-    setActiveTab(tabName)
-    fetchTabData(tabName)
+
+    try {
+      let endpoint = ''
+      switch(tabName) {
+        case 'fiidii':
+          endpoint = `${API_BASE}/data/${recordId}`
+          break
+        case 'option-chain':
+          endpoint = `${API_BASE}/option-chain/data/${recordId}`
+          break
+        default:
+          endpoint = `${API_BASE}/${tabName}/data/${recordId}`
+      }
+      
+      const res = await axios.delete(endpoint)
+      if (res.data.success) {
+        alert('✅ Record deleted successfully')
+        fetchTabData(tabName, true, 1, dateFilters[tabName]?.startDate || null, dateFilters[tabName]?.endDate || null)
+      } else {
+        alert('❌ Failed to delete record: ' + (res.data.error || 'Unknown error'))
+      }
+    } catch (error) {
+      alert('❌ Error deleting record: ' + error.message)
+    }
   }
 
-  // Handle pricing page navigation
-  const handlePricingNavigation = () => {
-    setShowPricing(true)
-    setShowHome(false)
+  // Handle apply date filter
+  const handleApplyDateFilter = (tabName) => {
+    const filter = dateFilters[tabName] || {}
+    fetchTabData(tabName, true, 1, filter.startDate || null, filter.endDate || null)
   }
 
-
-  // Show home page (public access - no auth required)
-  if (showHome) {
-    return (
-      <>
-        {/* Logout Confirmation Dialog */}
-        {showLogoutDialog && (
-          <div className="logout-dialog-overlay" onClick={handleCancelLogout}>
-            <div className="logout-dialog" onClick={(e) => e.stopPropagation()}>
-              <button className="dialog-close-btn" onClick={handleCancelLogout}>
-                <X size={20} />
-              </button>
-              <div className="dialog-icon-wrapper">
-                <AlertCircle size={48} className="dialog-icon" />
-              </div>
-              <h2 className="dialog-title">Confirm Logout</h2>
-              <p className="dialog-message">
-                Are you sure you want to logout? You will need to login again to access the dashboard.
-              </p>
-              <div className="dialog-actions">
-                <button 
-                  className="dialog-btn dialog-btn-cancel" 
-                  onClick={handleCancelLogout}
-                >
-                  <X size={18} />
-                  Cancel
-                </button>
-                <button 
-                  className="dialog-btn dialog-btn-confirm" 
-                  onClick={handleLogout}
-                >
-                  <LogOut size={18} />
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="app">
-          <header className="header">
-            <div className="header-content">
-              <div className="header-brand">
-                <div className="brand-logo">
-                  <Activity size={24} />
-                </div>
-                <h1>X Fin Ai</h1>
-              </div>
-              {isAuthenticated && (
-                <div className="header-actions">
-                  <span className="user-name">{username}</span>
-                  <button 
-                    className="logout-btn"
-                    onClick={handleLogoutClick}
-                    title="Logout"
-                  >
-                    <LogOut size={20} />
-                  </button>
-                </div>
-              )}
-            </div>
-          </header>
-          <main className="main-content home-main">
-            {showPricing ? (
-              <Pricing onNavigate={handleHomeNavigation} />
-            ) : (
-              <HomePage onNavigate={handleHomeNavigation} />
-            )}
-          </main>
-          <Footer />
-        </div>
-      </>
-    )
+  // Handle clear date filter
+  const handleClearDateFilter = (tabName) => {
+    setDateFilters(prev => ({
+      ...prev,
+      [tabName]: { startDate: '', endDate: '' }
+    }))
+    fetchTabData(tabName, true, 1, null, null)
   }
 
-  // Show login page if trying to access dashboard without authentication
-  if (!isAuthenticated && !showHome) {
+  // Handle row click to show detail
+  const handleRowClick = async (record, tabName) => {
+    try {
+      // For option chain and bank tabs, fetch full record data
+      const optionChainTabs = ['option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk']
+      
+      if (optionChainTabs.includes(tabName)) {
+        // Fetch full record with all data
+        let endpoint = ''
+        if (tabName === 'option-chain') {
+          endpoint = `${API_BASE}/option-chain/data/${record._id}`
+        } else {
+          endpoint = `${API_BASE}/${tabName}/data/${record._id}`
+        }
+        
+        const response = await axios.get(endpoint, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`
+          }
+        })
+        
+        if (response.data.success) {
+          setSelectedRecord(response.data.data)
+          setSelectedTabName(tabName)
+        } else {
+          alert('Failed to load record details: ' + (response.data.error || 'Unknown error'))
+        }
+      } else {
+        // For other tabs, use the record as is
+        setSelectedRecord(record)
+        setSelectedTabName(tabName)
+      }
+    } catch (error) {
+      console.error('Error fetching record details:', error)
+      alert('Error loading record details: ' + (error.response?.data?.error || error.message))
+    }
+  }
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
     return <Login onLoginSuccess={handleLoginSuccess} />
   }
 
@@ -1350,17 +1423,10 @@ function App() {
               <button className="menu-toggle" onClick={toggleSidebar}>
                 <Menu size={24} />
               </button>
-              <button 
-                className="home-btn"
-                onClick={() => setShowHome(true)}
-                title="Go to Home"
-              >
-                <Home size={20} />
-              </button>
               <div className="brand-logo">
                 <Activity size={24} />
               </div>
-              <h1>X Fin Ai</h1>
+              <h1>X Fin Ai - Admin Panel</h1>
             </div>
             <div className="header-actions">
               <span className="user-name">{username}</span>
@@ -1389,16 +1455,6 @@ function App() {
         <div className="sidebar-section">
           <div className="sidebar-section-title">Main Menu</div>
           <ul className="sidebar-menu">
-            <li 
-              className="sidebar-item"
-              onClick={() => {
-                setShowHome(true)
-                setSidebarOpen(false)
-              }}
-            >
-              <Home size={20} />
-              Home
-            </li>
             <li 
               className={`sidebar-item ${activeTab === 'settings' ? 'active' : ''}`}
               onClick={() => {
@@ -1668,6 +1724,45 @@ function App() {
                 <span className="badge">{pagination['fiidii']?.total || data.length} records</span>
               </div>
 
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['fiidii']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      fiidii: { ...prev.fiidii, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['fiidii']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      fiidii: { ...prev.fiidii, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('fiidii')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['fiidii']?.startDate || dateFilters['fiidii']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('fiidii')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {data.length === 0 ? (
                 <div className="empty-state">
                   <Database size={48} />
@@ -1687,6 +1782,7 @@ function App() {
                         <th>FII Sell</th>
                         <th>FII Net</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1697,7 +1793,11 @@ function App() {
                         const fiiNet = parseFloat(fii.netValue) || 0
 
                         return (
-                          <tr key={record._id}>
+                          <tr 
+                            key={record._id}
+                            onClick={() => handleRowClick(record, 'fiidii')}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <td className="date-cell">{record.date}</td>
                             <td>{formatNumber(dii.buyValue)}</td>
                             <td>{formatNumber(dii.sellValue)}</td>
@@ -1712,6 +1812,15 @@ function App() {
                               {formatNumber(fii.netValue)}
                             </td>
                             <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className="btn-icon btn-danger"
+                                onClick={() => handleDeleteRecord(record._id, 'fiidii')}
+                                title="Delete record"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
                           </tr>
                         )
                       })}
@@ -1808,6 +1917,15 @@ function App() {
                       <div className="stat-value">{formatNumber(optionChainStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {optionChainExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{optionChainExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1817,6 +1935,45 @@ function App() {
               <div className="card-header">
                 <h2>NIFTY Option Chain Collected Data</h2>
                 <span className="badge">{optionChainData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['option-chain']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      'option-chain': { ...prev['option-chain'], startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['option-chain']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      'option-chain': { ...prev['option-chain'], endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('option-chain')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['option-chain']?.startDate || dateFilters['option-chain']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('option-chain')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {optionChainData.length === 0 ? (
@@ -1834,16 +1991,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {optionChainData.map((record) => (
-                        <tr key={record._id}>
+                        <tr 
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'option-chain')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'option-chain')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1938,6 +2109,15 @@ function App() {
                       <div className="stat-value">{formatNumber(bankniftyStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {bankniftyExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{bankniftyExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1947,6 +2127,45 @@ function App() {
               <div className="card-header">
                 <h2>BankNifty Option Chain Collected Data</h2>
                 <span className="badge">{bankniftyData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['banknifty']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      banknifty: { ...prev.banknifty, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['banknifty']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      banknifty: { ...prev.banknifty, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('banknifty')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['banknifty']?.startDate || dateFilters['banknifty']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('banknifty')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {bankniftyData.length === 0 ? (
@@ -1964,16 +2183,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bankniftyData.map((record) => (
-                        <tr key={record._id}>
+                        <tr 
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'banknifty')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'banknifty')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2068,6 +2301,15 @@ function App() {
                       <div className="stat-value">{formatNumber(finniftyStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {finniftyExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{finniftyExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2077,6 +2319,45 @@ function App() {
               <div className="card-header">
                 <h2>Finnifty Option Chain Collected Data</h2>
                 <span className="badge">{finniftyData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['finnifty']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      finnifty: { ...prev.finnifty, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['finnifty']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      finnifty: { ...prev.finnifty, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('finnifty')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['finnifty']?.startDate || dateFilters['finnifty']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('finnifty')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {finniftyData.length === 0 ? (
@@ -2094,16 +2375,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {finniftyData.map((record) => (
-                        <tr key={record._id}>
+                        <tr 
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'finnifty')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'finnifty')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2198,6 +2493,15 @@ function App() {
                       <div className="stat-value">{formatNumber(midcpniftyStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {midcpniftyExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{midcpniftyExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2207,6 +2511,45 @@ function App() {
               <div className="card-header">
                 <h2>MidcapNifty Option Chain Collected Data</h2>
                 <span className="badge">{midcpniftyData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['midcpnifty']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      midcpnifty: { ...prev.midcpnifty, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['midcpnifty']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      midcpnifty: { ...prev.midcpnifty, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('midcpnifty')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['midcpnifty']?.startDate || dateFilters['midcpnifty']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('midcpnifty')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {midcpniftyData.length === 0 ? (
@@ -2224,16 +2567,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {midcpniftyData.map((record) => (
-                        <tr key={record._id}>
-                          <td>{record.timestamp || '-'}</td>
+                        <tr 
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'midcpnifty')}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'midcpnifty')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2328,6 +2685,15 @@ function App() {
                       <div className="stat-value">{formatNumber(hdfcbankStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {hdfcbankExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{hdfcbankExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2337,6 +2703,45 @@ function App() {
               <div className="card-header">
                 <h2>HDFC Bank Option Chain Collected Data</h2>
                 <span className="badge">{hdfcbankData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['hdfcbank']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      hdfcbank: { ...prev.hdfcbank, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['hdfcbank']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      hdfcbank: { ...prev.hdfcbank, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('hdfcbank')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['hdfcbank']?.startDate || dateFilters['hdfcbank']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('hdfcbank')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {hdfcbankData.length === 0 ? (
@@ -2354,16 +2759,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {hdfcbankData.map((record) => (
-                        <tr key={record._id}>
+                        <tr 
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'hdfcbank')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'hdfcbank')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2458,6 +2877,15 @@ function App() {
                       <div className="stat-value">{formatNumber(icicibankStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {icicibankExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{icicibankExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2467,6 +2895,45 @@ function App() {
               <div className="card-header">
                 <h2>ICICI Bank Option Chain Collected Data</h2>
                 <span className="badge">{icicibankData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['icicibank']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      icicibank: { ...prev.icicibank, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['icicibank']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      icicibank: { ...prev.icicibank, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('icicibank')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['icicibank']?.startDate || dateFilters['icicibank']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('icicibank')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {icicibankData.length === 0 ? (
@@ -2484,16 +2951,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {icicibankData.map((record) => (
-                        <tr key={record._id}>
+                        <tr 
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'icicibank')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'icicibank')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2588,6 +3069,15 @@ function App() {
                       <div className="stat-value">{formatNumber(sbinStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {sbinExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{sbinExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2597,6 +3087,45 @@ function App() {
               <div className="card-header">
                 <h2>SBIN Option Chain Collected Data</h2>
                 <span className="badge">{sbinData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['sbin']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      sbin: { ...prev.sbin, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['sbin']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      sbin: { ...prev.sbin, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('sbin')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['sbin']?.startDate || dateFilters['sbin']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('sbin')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {sbinData.length === 0 ? (
@@ -2614,16 +3143,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sbinData.map((record) => (
-                        <tr key={record._id}>
+                        <tr 
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'sbin')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'sbin')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2718,6 +3261,15 @@ function App() {
                       <div className="stat-value">{formatNumber(kotakbankStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {kotakbankExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{kotakbankExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2727,6 +3279,45 @@ function App() {
               <div className="card-header">
                 <h2>Kotak Bank Option Chain Collected Data</h2>
                 <span className="badge">{kotakbankData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['kotakbank']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      kotakbank: { ...prev.kotakbank, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['kotakbank']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      kotakbank: { ...prev.kotakbank, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('kotakbank')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['kotakbank']?.startDate || dateFilters['kotakbank']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('kotakbank')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {kotakbankData.length === 0 ? (
@@ -2744,16 +3335,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {kotakbankData.map((record) => (
-                        <tr key={record._id}>
+                        <tr 
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'kotakbank')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'kotakbank')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2848,6 +3453,15 @@ function App() {
                       <div className="stat-value">{formatNumber(axisbankStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {axisbankExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{axisbankExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2857,6 +3471,45 @@ function App() {
               <div className="card-header">
                 <h2>Axis Bank Option Chain Collected Data</h2>
                 <span className="badge">{axisbankData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['axisbank']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      axisbank: { ...prev.axisbank, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['axisbank']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      axisbank: { ...prev.axisbank, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('axisbank')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['axisbank']?.startDate || dateFilters['axisbank']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('axisbank')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {axisbankData.length === 0 ? (
@@ -2874,16 +3527,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {axisbankData.map((record) => (
-                        <tr key={record._id}>
+                        <tr
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'axisbank')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'axisbank')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2978,6 +3645,15 @@ function App() {
                       <div className="stat-value">{formatNumber(bankbarodaStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {bankbarodaExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{bankbarodaExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2987,6 +3663,45 @@ function App() {
               <div className="card-header">
                 <h2>Bank of Baroda Option Chain Collected Data</h2>
                 <span className="badge">{bankbarodaData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['bankbaroda']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      bankbaroda: { ...prev.bankbaroda, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['bankbaroda']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      bankbaroda: { ...prev.bankbaroda, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('bankbaroda')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['bankbaroda']?.startDate || dateFilters['bankbaroda']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('bankbaroda')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {bankbarodaData.length === 0 ? (
@@ -3004,16 +3719,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bankbarodaData.map((record) => (
-                        <tr key={record._id}>
+                        <tr
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'bankbaroda')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'bankbaroda')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -3108,6 +3837,15 @@ function App() {
                       <div className="stat-value">{formatNumber(pnbStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {pnbExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{pnbExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3117,6 +3855,45 @@ function App() {
               <div className="card-header">
                 <h2>PNB Option Chain Collected Data</h2>
                 <span className="badge">{pnbData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['pnb']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      pnb: { ...prev.pnb, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['pnb']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      pnb: { ...prev.pnb, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('pnb')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['pnb']?.startDate || dateFilters['pnb']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('pnb')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {pnbData.length === 0 ? (
@@ -3134,16 +3911,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {pnbData.map((record) => (
-                        <tr key={record._id}>
+                        <tr
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'pnb')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'pnb')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -3238,6 +4029,15 @@ function App() {
                       <div className="stat-value">{formatNumber(canbkStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {canbkExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{canbkExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3247,6 +4047,45 @@ function App() {
               <div className="card-header">
                 <h2>CANBK Option Chain Collected Data</h2>
                 <span className="badge">{canbkData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['canbk']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      canbk: { ...prev.canbk, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['canbk']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      canbk: { ...prev.canbk, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('canbk')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['canbk']?.startDate || dateFilters['canbk']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('canbk')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {canbkData.length === 0 ? (
@@ -3264,16 +4103,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {canbkData.map((record) => (
-                        <tr key={record._id}>
+                        <tr
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'canbk')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'canbk')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -3368,6 +4221,15 @@ function App() {
                       <div className="stat-value">{formatNumber(aubankStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {aubankExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{aubankExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3377,6 +4239,45 @@ function App() {
               <div className="card-header">
                 <h2>AUBANK Option Chain Collected Data</h2>
                 <span className="badge">{aubankData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['aubank']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      aubank: { ...prev.aubank, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['aubank']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      aubank: { ...prev.aubank, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('aubank')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['aubank']?.startDate || dateFilters['aubank']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('aubank')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {aubankData.length === 0 ? (
@@ -3394,16 +4295,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {aubankData.map((record) => (
-                        <tr key={record._id}>
+                        <tr
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'aubank')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'aubank')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -3498,6 +4413,15 @@ function App() {
                       <div className="stat-value">{formatNumber(indusindbkStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {indusindbkExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{indusindbkExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3507,6 +4431,45 @@ function App() {
               <div className="card-header">
                 <h2>INDUSINDBK Option Chain Collected Data</h2>
                 <span className="badge">{indusindbkData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['indusindbk']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      indusindbk: { ...prev.indusindbk, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['indusindbk']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      indusindbk: { ...prev.indusindbk, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('indusindbk')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['indusindbk']?.startDate || dateFilters['indusindbk']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('indusindbk')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {indusindbkData.length === 0 ? (
@@ -3524,16 +4487,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {indusindbkData.map((record) => (
-                        <tr key={record._id}>
+                        <tr
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'indusindbk')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'indusindbk')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -3628,6 +4605,15 @@ function App() {
                       <div className="stat-value">{formatNumber(idfcfirstbStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {idfcfirstbExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{idfcfirstbExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3637,6 +4623,45 @@ function App() {
               <div className="card-header">
                 <h2>IDFCFIRSTB Option Chain Collected Data</h2>
                 <span className="badge">{idfcfirstbData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['idfcfirstb']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      idfcfirstb: { ...prev.idfcfirstb, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['idfcfirstb']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      idfcfirstb: { ...prev.idfcfirstb, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('idfcfirstb')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['idfcfirstb']?.startDate || dateFilters['idfcfirstb']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('idfcfirstb')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {idfcfirstbData.length === 0 ? (
@@ -3654,16 +4679,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {idfcfirstbData.map((record) => (
-                        <tr key={record._id}>
+                        <tr
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'idfcfirstb')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'idfcfirstb')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -3758,6 +4797,15 @@ function App() {
                       <div className="stat-value">{formatNumber(federalbnkStats.latest_underlying_value)}</div>
                     </div>
                   </div>
+                  {federalbnkExpiry && (
+                    <div className="stat-item">
+                      <Calendar size={24} className="stat-icon" />
+                      <div>
+                        <div className="stat-label">Current Expiry Date</div>
+                        <div className="stat-value" style={{ color: 'var(--green)', fontWeight: 'bold' }}>{federalbnkExpiry}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3767,6 +4815,45 @@ function App() {
               <div className="card-header">
                 <h2>FEDERALBNK Option Chain Collected Data</h2>
                 <span className="badge">{federalbnkData.length} records</span>
+              </div>
+
+              {/* Date Filter */}
+              <div className="date-filter-container">
+                <div className="date-filter-group">
+                  <Filter size={18} />
+                  <label>Start Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['federalbnk']?.startDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      federalbnk: { ...prev.federalbnk, startDate: e.target.value }
+                    }))}
+                  />
+                  <label>End Date:</label>
+                  <input
+                    type="date"
+                    value={dateFilters['federalbnk']?.endDate || ''}
+                    onChange={(e) => setDateFilters(prev => ({
+                      ...prev,
+                      federalbnk: { ...prev.federalbnk, endDate: e.target.value }
+                    }))}
+                  />
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleApplyDateFilter('federalbnk')}
+                  >
+                    Apply Filter
+                  </button>
+                  {(dateFilters['federalbnk']?.startDate || dateFilters['federalbnk']?.endDate) && (
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => handleClearDateFilter('federalbnk')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
 
               {federalbnkData.length === 0 ? (
@@ -3784,16 +4871,30 @@ function App() {
                         <th>Data Count</th>
                         <th>Inserted At</th>
                         <th>Updated At</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {federalbnkData.map((record) => (
-                        <tr key={record._id}>
+                        <tr
+                          key={record._id}
+                          onClick={() => handleRowClick(record, 'federalbnk')}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td className="date-cell">{record.timestamp || '-'}</td>
                           <td>{formatNumber(record.underlyingValue)}</td>
                           <td>{record.dataCount || 0}</td>
                           <td className="muted">{formatDateTime(record.insertedAt)}</td>
                           <td className="muted">{formatDateTime(record.updatedAt)}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="btn-icon btn-danger"
+                              onClick={() => handleDeleteRecord(record._id, 'federalbnk')}
+                              title="Delete record"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -4418,8 +5519,19 @@ function App() {
         ) : null}
         </div>
       </main>
-      <Footer />
     </div>
+    
+    {/* Detail View Modal */}
+    {selectedRecord && (
+      <DetailView
+        record={selectedRecord}
+        tabName={selectedTabName}
+        onClose={() => {
+          setSelectedRecord(null)
+          setSelectedTabName(null)
+        }}
+      />
+    )}
     </>
   )
 }

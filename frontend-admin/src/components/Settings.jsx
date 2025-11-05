@@ -5,15 +5,13 @@ import {
   Save, 
   Calendar, 
   Clock, 
-  ToggleLeft, 
-  ToggleRight,
   Plus,
   X,
   AlertCircle,
   CheckCircle
 } from 'lucide-react'
 
-const API_BASE = '/api'
+const API_BASE = 'https://api.xfinai.cloud/api'
 
 const Settings = ({ authToken }) => {
   const [activeTab, setActiveTab] = useState('banks')
@@ -34,6 +32,16 @@ const Settings = ({ authToken }) => {
     loadConfig()
     loadHolidays()
   }, [])
+
+  // Auto-hide message after 5 seconds
+  useEffect(() => {
+    if (message.text) {
+      const timer = setTimeout(() => {
+        setMessage({ type: '', text: '' })
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [message.text])
 
   const loadConfig = async () => {
     try {
@@ -182,7 +190,8 @@ const Settings = ({ authToken }) => {
     { id: 'indices', label: 'Indices', icon: '📊' },
     { id: 'gainers_losers', label: 'Gainers/Losers', icon: '📈' },
     { id: 'news', label: 'News', icon: '📰' },
-    { id: 'fiidii', label: 'FII/DII', icon: '💰' }
+    { id: 'fiidii', label: 'FII/DII', icon: '💰' },
+    { id: 'holidays', label: 'Holidays', icon: '📅' }
   ]
 
   const renderConfigForm = (schedulerType) => {
@@ -232,30 +241,16 @@ const Settings = ({ authToken }) => {
           {isFiidii && <small>FII/DII runs only at start time</small>}
         </div>
 
-        <div className="form-group">
-          <label>
-            <ToggleRight size={16} />
-            Enabled
-          </label>
-          <div className="toggle-switch">
-            <button
-              className={`toggle-btn ${schedulerConfig.enabled ? 'active' : ''}`}
-              onClick={() => handleConfigChange(schedulerType, 'enabled', !schedulerConfig.enabled)}
-            >
-              {schedulerConfig.enabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-              <span>{schedulerConfig.enabled ? 'Enabled' : 'Disabled'}</span>
-            </button>
-          </div>
+        <div className="form-group save-btn-container">
+          <button
+            className={`save-btn ${unsavedChanges[schedulerType] ? 'has-changes' : ''}`}
+            onClick={() => saveConfig(schedulerType)}
+            disabled={loading || !unsavedChanges[schedulerType]}
+          >
+            <Save size={18} />
+            {loading ? 'Saving...' : unsavedChanges[schedulerType] ? 'Save Changes' : 'All Changes Saved'}
+          </button>
         </div>
-
-        <button
-          className="save-btn"
-          onClick={() => saveConfig(schedulerType)}
-          disabled={loading || !unsavedChanges[schedulerType]}
-        >
-          <Save size={16} />
-          {unsavedChanges[schedulerType] ? 'Save Changes' : 'Saved'}
-        </button>
       </div>
     )
   }
@@ -263,82 +258,123 @@ const Settings = ({ authToken }) => {
   return (
     <div className="settings-page">
       <div className="settings-header">
-        <SettingsIcon size={24} />
-        <h1>Scheduler Settings</h1>
-      </div>
-
-      {message.text && (
-        <div className={`message ${message.type}`}>
-          {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-          <span>{message.text}</span>
-        </div>
-      )}
-
-      <div className="settings-container">
-        <div className="settings-tabs">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <span className="tab-icon">{tab.icon}</span>
-              <span>{tab.label}</span>
-              {unsavedChanges[tab.id] && <span className="unsaved-indicator">•</span>}
-            </button>
-          ))}
-        </div>
-
-        <div className="settings-content">
-          <div className="settings-card">
-            <h2>{getSchedulerName(activeTab)}</h2>
-            {renderConfigForm(activeTab)}
+        <div className="settings-header-content">
+          <div className="settings-title-section">
+            <div className="settings-icon-wrapper">
+              <SettingsIcon size={28} />
+            </div>
+            <div>
+              <h1>Scheduler Settings</h1>
+              <p className="settings-subtitle">Configure intervals, timing, and holidays for all schedulers</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="holidays-section">
-        <div className="holidays-header">
-          <Calendar size={20} />
-          <h2>Holidays</h2>
-          <p>All schedulers will skip execution on holidays</p>
+      {message.text && (
+        <div className={`message ${message.type}`}>
+          {message.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+          <span>{message.text}</span>
+        </div>
+      )}
+
+      <div className="settings-layout">
+        <div className="settings-tabs-container">
+          <div className="settings-tabs-header">
+            <h3>Scheduler Groups</h3>
+          </div>
+          <div className="settings-tabs">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <span className="tab-icon">{tab.icon}</span>
+                <span className="tab-label">{tab.label}</span>
+                {unsavedChanges[tab.id] && <span className="unsaved-indicator" title="Unsaved changes">●</span>}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="holidays-add">
-          <input
-            type="date"
-            value={newHoliday}
-            onChange={(e) => setNewHoliday(e.target.value)}
-            placeholder="YYYY-MM-DD"
-          />
-          <button onClick={addHoliday} disabled={loading || !newHoliday}>
-            <Plus size={16} />
-            Add Holiday
-          </button>
-        </div>
+        <div className="settings-content-wrapper">
+          {activeTab === 'holidays' ? (
+            <div className="holidays-section">
+              <div className="holidays-header">
+                <div className="holidays-header-content">
+                  <div className="holidays-icon-wrapper">
+                    <Calendar size={24} />
+                  </div>
+                  <div>
+                    <h2>Market Holidays</h2>
+                    <p>All schedulers will skip execution on these dates</p>
+                  </div>
+                </div>
+              </div>
 
-        <div className="holidays-list">
-          {holidays.length === 0 ? (
-            <p className="no-holidays">No holidays configured</p>
-          ) : (
-            holidays.map(date => (
-              <div key={date} className="holiday-item">
-                <Calendar size={16} />
-                <span>{new Date(date).toLocaleDateString('en-US', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}</span>
-                <button
-                  className="remove-btn"
-                  onClick={() => removeHoliday(date)}
-                  disabled={loading}
+              <div className="holidays-add">
+                <input
+                  type="date"
+                  value={newHoliday}
+                  onChange={(e) => setNewHoliday(e.target.value)}
+                  placeholder="Select date"
+                  className="holiday-input"
+                />
+                <button 
+                  onClick={addHoliday} 
+                  disabled={loading || !newHoliday}
+                  className="add-holiday-btn"
                 >
-                  <X size={16} />
+                  <Plus size={18} />
+                  Add Holiday
                 </button>
               </div>
-            ))
+
+              <div className="holidays-list">
+                {holidays.length === 0 ? (
+                  <div className="no-holidays">
+                    <Calendar size={48} className="no-holidays-icon" />
+                    <p>No holidays configured</p>
+                    <span className="no-holidays-hint">Add holidays to prevent schedulers from running on those dates</span>
+                  </div>
+                ) : (
+                  <div className="holidays-grid">
+                    {holidays.map(date => (
+                      <div key={date} className="holiday-item">
+                        <div className="holiday-item-content">
+                          <Calendar size={18} className="holiday-icon" />
+                          <div className="holiday-date">
+                            <span className="holiday-date-full">{new Date(date).toLocaleDateString('en-US', { 
+                              weekday: 'long', 
+                              year: 'numeric', 
+                              month: 'long', 
+                              day: 'numeric' 
+                            })}</span>
+                            <span className="holiday-date-short">{date}</span>
+                          </div>
+                        </div>
+                        <button
+                          className="remove-btn"
+                          onClick={() => removeHoliday(date)}
+                          disabled={loading}
+                          title="Remove holiday"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="settings-card">
+              <div className="settings-card-header">
+                <h2>{getSchedulerName(activeTab)}</h2>
+              </div>
+              {renderConfigForm(activeTab)}
+            </div>
           )}
         </div>
       </div>
