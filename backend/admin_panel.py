@@ -810,10 +810,10 @@ def api_option_chain_trigger():
         }), 500
 
 
-@app.route('/api/option-chain/data/<record_id>', methods=['DELETE'])
+@app.route('/api/option-chain/data/<record_id>', methods=['GET', 'DELETE'])
 @token_required
-def api_delete_option_chain_data(record_id):
-    """API endpoint to delete a specific option chain record"""
+def api_option_chain_data_by_id(record_id):
+    """API endpoint to get or delete a specific option chain record"""
     try:
         collector = NSEOptionChainCollector()
         
@@ -824,21 +824,46 @@ def api_delete_option_chain_data(record_id):
                 "error": "Invalid record ID"
             }), 400
         
-        # Delete the record
-        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
-        
-        collector.close()
-        
-        if result.deleted_count == 0:
+        if request.method == 'GET':
+            # Get the full record
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            # Convert ObjectId to string and format dates
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
             return jsonify({
-                "success": False,
-                "error": "Record not found"
-            }), 404
+                "success": True,
+                "data": record_dict
+            })
         
-        return jsonify({
-            "success": True,
-            "message": "Record deleted successfully"
-        })
+        elif request.method == 'DELETE':
+            # Delete the record
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -1054,6 +1079,47 @@ def api_banknifty_trigger():
         return jsonify({
             "success": success,
             "message": "BankNifty option chain data collection completed" if success else "BankNifty option chain data collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/banknifty/data/<record_id>', methods=['GET'])
+@token_required
+def api_get_banknifty_data(record_id):
+    """API endpoint to get a specific BankNifty option chain record with full data"""
+    try:
+        collector = NSEBankNiftyOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        record = collector.collection.find_one({"_id": ObjectId(record_id)})
+        collector.close()
+        
+        if not record:
+            return jsonify({
+                "success": False,
+                "error": "Record not found"
+            }), 404
+        
+        record_dict = {
+            "_id": str(record.get("_id")),
+            "records": record.get("records", {}),
+            "filtered": record.get("filtered", {}),
+            "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+            "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+        }
+        
+        return jsonify({
+            "success": True,
+            "data": record_dict
         })
     except Exception as e:
         return jsonify({
@@ -1312,10 +1378,10 @@ def api_finnifty_trigger():
         }), 500
 
 
-@app.route('/api/finnifty/data/<record_id>', methods=['DELETE'])
+@app.route('/api/finnifty/data/<record_id>', methods=['GET', 'DELETE'])
 @token_required
-def api_delete_finnifty_data(record_id):
-    """API endpoint to delete a specific Finnifty option chain record"""
+def api_finnifty_data_by_id(record_id):
+    """API endpoint to get or delete a specific Finnifty option chain record"""
     try:
         collector = NSEFinniftyOptionChainCollector()
         
@@ -1325,19 +1391,43 @@ def api_delete_finnifty_data(record_id):
                 "error": "Invalid record ID"
             }), 400
         
-        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
-        collector.close()
-        
-        if result.deleted_count == 0:
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
             return jsonify({
-                "success": False,
-                "error": "Record not found"
-            }), 404
+                "success": True,
+                "data": record_dict
+            })
         
-        return jsonify({
-            "success": True,
-            "message": "Record deleted successfully"
-        })
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -1570,10 +1660,10 @@ def api_midcpnifty_trigger():
         }), 500
 
 
-@app.route('/api/midcpnifty/data/<record_id>', methods=['DELETE'])
+@app.route('/api/midcpnifty/data/<record_id>', methods=['GET', 'DELETE'])
 @token_required
-def api_delete_midcpnifty_data(record_id):
-    """API endpoint to delete a specific MidcapNifty option chain record"""
+def api_midcpnifty_data_by_id(record_id):
+    """API endpoint to get or delete a specific MidcapNifty option chain record"""
     try:
         collector = NSEMidcapNiftyOptionChainCollector()
         
@@ -1583,19 +1673,43 @@ def api_delete_midcpnifty_data(record_id):
                 "error": "Invalid record ID"
             }), 400
         
-        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
-        collector.close()
-        
-        if result.deleted_count == 0:
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
             return jsonify({
-                "success": False,
-                "error": "Record not found"
-            }), 404
+                "success": True,
+                "data": record_dict
+            })
         
-        return jsonify({
-            "success": True,
-            "message": "Record deleted successfully"
-        })
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -1807,6 +1921,63 @@ def api_hdfcbank_trigger():
         }), 500
 
 
+@app.route('/api/hdfcbank/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_hdfcbank_data_by_id(record_id):
+    """API endpoint to get or delete a specific HDFC Bank option chain record"""
+    try:
+        collector = NSEHDFCBankOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # ICICI Bank Option Chain Endpoints
 
 def get_icicibank_option_chain_next_run_time():
@@ -2004,6 +2175,63 @@ def api_icicibank_trigger():
             "success": success,
             "message": "ICICI Bank option chain data collection completed" if success else "ICICI Bank option chain data collection failed"
         })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/icicibank/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_icicibank_data_by_id(record_id):
+    """API endpoint to get or delete a specific ICICI Bank option chain record"""
+    try:
+        collector = NSEICICIBankOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -2215,6 +2443,63 @@ def api_sbin_trigger():
         }), 500
 
 
+@app.route('/api/sbin/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_sbin_data_by_id(record_id):
+    """API endpoint to get or delete a specific SBIN option chain record"""
+    try:
+        collector = NSESBINOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # Kotak Bank Option Chain Endpoints
 
 def get_kotakbank_option_chain_next_run_time():
@@ -2412,6 +2697,63 @@ def api_kotakbank_trigger():
             "success": success,
             "message": "Kotak Bank option chain data collection completed" if success else "Kotak Bank option chain data collection failed"
         })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/kotakbank/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_kotakbank_data_by_id(record_id):
+    """API endpoint to get or delete a specific Kotak Bank option chain record"""
+    try:
+        collector = NSEKotakBankOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -2623,6 +2965,63 @@ def api_axisbank_trigger():
         }), 500
 
 
+@app.route('/api/axisbank/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_axisbank_data_by_id(record_id):
+    """API endpoint to get or delete a specific Axis Bank option chain record"""
+    try:
+        collector = NSEAxisBankOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # Bank of Baroda Option Chain Endpoints
 
 def get_bankbaroda_option_chain_next_run_time():
@@ -2820,6 +3219,63 @@ def api_bankbaroda_trigger():
             "success": success,
             "message": "Bank of Baroda option chain data collection completed" if success else "Bank of Baroda option chain data collection failed"
         })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/bankbaroda/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_bankbaroda_data_by_id(record_id):
+    """API endpoint to get or delete a specific Bank of Baroda option chain record"""
+    try:
+        collector = NSEBankBarodaOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -3031,6 +3487,63 @@ def api_pnb_trigger():
         }), 500
 
 
+@app.route('/api/pnb/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_pnb_data_by_id(record_id):
+    """API endpoint to get or delete a specific PNB option chain record"""
+    try:
+        collector = NSEPNBOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # CANBK Option Chain Endpoints
 
 def get_canbk_option_chain_next_run_time():
@@ -3228,6 +3741,63 @@ def api_canbk_trigger():
             "success": success,
             "message": "CANBK option chain data collection completed" if success else "CANBK option chain data collection failed"
         })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/canbk/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_canbk_data_by_id(record_id):
+    """API endpoint to get or delete a specific CANBK option chain record"""
+    try:
+        collector = NSECANBKOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -3439,6 +4009,63 @@ def api_aubank_trigger():
         }), 500
 
 
+@app.route('/api/aubank/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_aubank_data_by_id(record_id):
+    """API endpoint to get or delete a specific AUBANK option chain record"""
+    try:
+        collector = NSEAUBANKOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # INDUSINDBK Option Chain Endpoints
 
 def get_indusindbk_option_chain_next_run_time():
@@ -3636,6 +4263,63 @@ def api_indusindbk_trigger():
             "success": success,
             "message": "INDUSINDBK option chain data collection completed" if success else "INDUSINDBK option chain data collection failed"
         })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/indusindbk/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_indusindbk_data_by_id(record_id):
+    """API endpoint to get or delete a specific INDUSINDBK option chain record"""
+    try:
+        collector = NSEIndusIndBkOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -3847,6 +4531,63 @@ def api_idfcfirstb_trigger():
         }), 500
 
 
+@app.route('/api/idfcfirstb/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_idfcfirstb_data_by_id(record_id):
+    """API endpoint to get or delete a specific IDFCFIRSTB option chain record"""
+    try:
+        collector = NSEIDFCFIRSTBOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # FEDERALBNK Option Chain Endpoints
 
 def get_federalbnk_option_chain_next_run_time():
@@ -4044,6 +4785,63 @@ def api_federalbnk_trigger():
             "success": success,
             "message": "FEDERALBNK option chain data collection completed" if success else "FEDERALBNK option chain data collection failed"
         })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/federalbnk/data/<record_id>', methods=['GET', 'DELETE'])
+@token_required
+def api_federalbnk_data_by_id(record_id):
+    """API endpoint to get or delete a specific FEDERALBNK option chain record"""
+    try:
+        collector = NSEFEDERALBNKOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        if request.method == 'GET':
+            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
+        
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            return jsonify({
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
