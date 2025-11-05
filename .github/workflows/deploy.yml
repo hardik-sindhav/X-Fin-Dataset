@@ -3,7 +3,7 @@ name: 🚀 Deploy to VPS
 on:
   push:
     branches:
-      - main  # or master if your main branch is named differently
+      - main  # change if your main branch name is different
 
 jobs:
   deploy:
@@ -21,11 +21,12 @@ jobs:
 
       - name: Add VPS to known_hosts
         run: |
+          mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy via SSH
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
           set -e
           echo "🚀 Starting deployment on VPS..."
 
@@ -35,33 +36,35 @@ jobs:
 
           # Clone repo if not exists
           if [ ! -d ".git" ]; then
-            git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git .
+            git clone https://github.com/hardik-sindhav/X-Fin-Dataset.git .
           fi
 
+          echo "📦 Pulling latest changes..."
+          git reset --hard
           git pull origin main
 
           echo "📦 Installing backend dependencies..."
           cd backend
-          python3 -m venv venv
+          python3 -m venv venv || true
           source venv/bin/activate
+          pip install -U pip
           pip install -r requirements.txt
           deactivate
           cd ..
 
           echo "🧠 Restarting backend + cron job..."
-          # Kill any old running instance of admin_panel.py
           pkill -f admin_panel.py || true
           cd backend
           nohup python3 admin_panel.py > /var/www/xfinai/backend.log 2>&1 &
 
           echo "⚙️ Building frontend..."
           cd ../frontend
-          npm install
+          npm install --legacy-peer-deps
           npm run build
 
           echo "⚙️ Building admin frontend..."
           cd ../frontend-admin
-          npm install
+          npm install --legacy-peer-deps
           npm run build
 
           echo "✅ Deployment complete!"
