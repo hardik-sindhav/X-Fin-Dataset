@@ -1,0 +1,34 @@
+{
+  "banks": {
+    "interval_minutes": 3,
+    "start_time": "09:15",
+    "end_time": "15:30",
+    "enabled": true
+  },
+  "indices": {
+    "interval_minutes": 3,
+    "start_time": "09:15",
+    "end_time": "15:30",
+    "enabled": true
+  },
+  "gainers_losers": {
+    "interval_minutes": 4,
+    "start_time": "09:15",
+    "end_time": "15:30",
+    "enabled": true
+  },
+  "news": {
+    "interval_minutes": 3,
+    "start_time": "09:15",
+    "end_time": "15:30",
+    "enabled": true
+  },
+  "fiidii": {
+    "interval_minutes": 60,
+    "start_time": "17:00",
+    "end_time": "17:00",
+    "enabled": true
+  },
+  "holidays": []
+}
+
