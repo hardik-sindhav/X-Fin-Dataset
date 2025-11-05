@@ -13,6 +13,7 @@ import logging
 from typing import Optional, Dict
 import os
 from dotenv import load_dotenv
+from redis_expiry_cache import get_expiry_cache
 
 # Load environment variables
 load_dotenv()
@@ -52,6 +53,7 @@ class NSEBankNiftyOptionChainCollector:
         self.client = None
         self.db = None
         self.collection = None
+        self.expiry_cache = get_expiry_cache()
         self._connect_mongo()
     
     def _connect_mongo(self):
@@ -89,13 +91,22 @@ class NSEBankNiftyOptionChainCollector:
     def _fetch_expiry_dates_with_retry(self) -> Optional[str]:
         """
         Fetch expiry dates from NSE API with retry logic
+        First checks Redis cache, then fetches from API if not cached
         Returns: First expiry date string (e.g., "25-Nov-2025") or None if all retries fail
         """
+        # First, try to get from Redis cache
+        cached_expiry = self.expiry_cache.get_expiry(SYMBOL)
+        if cached_expiry:
+            logger.info(f"Using cached BANKNIFTY expiry date: {cached_expiry}")
+            return cached_expiry
+        
+        # If not in cache, fetch from API
+        logger.info("BANKNIFTY expiry date not found in cache, fetching from API...")
         headers = self._get_headers()
         
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                logger.info(f"Fetching BANKNIFTY expiry dates (Attempt {attempt}/{MAX_RETRIES})")
+                logger.info(f"Fetching BANKNIFTY expiry dates from API (Attempt {attempt}/{MAX_RETRIES})")
                 
                 response = requests.get(EXPIRY_API_URL, headers=headers, timeout=30)
                 response.raise_for_status()
@@ -124,6 +135,15 @@ class NSEBankNiftyOptionChainCollector:
                 # Always pick the first expiry date
                 first_expiry = expiry_dates[0]
                 logger.info(f"Successfully fetched BANKNIFTY expiry dates. Using first expiry: {first_expiry}")
+                
+                # Cache the expiry date for today
+                try:
+                    self.expiry_cache.set_expiry(SYMBOL, first_expiry)
+                    logger.info(f"Cached BANKNIFTY expiry date: {first_expiry}")
+                except Exception as cache_error:
+                    logger.warning(f"Failed to cache expiry date: {str(cache_error)}")
+                    # Continue even if caching fails
+                
                 return first_expiry
                 
             except requests.exceptions.RequestException as e:
@@ -292,6 +312,19 @@ class NSEBankNiftyOptionChainCollector:
         except Exception as e:
             logger.error(f"Unexpected error in collect_and_save: {str(e)}")
             return False
+    
+    def get_current_expiry(self) -> Optional[str]:
+        """
+        Get current expiry date from cache or API
+        Returns: Expiry date string or None
+        """
+        # Try cache first
+        cached_expiry = self.expiry_cache.get_expiry(SYMBOL)
+        if cached_expiry:
+            return cached_expiry
+        
+        # If not in cache, try to fetch (this will cache it)
+        return self._fetch_expiry_dates_with_retry()
     
     def close(self):
         """Close MongoDB connection"""

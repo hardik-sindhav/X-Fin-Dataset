@@ -5,7 +5,6 @@ import {
   Clock, 
   Database, 
   RefreshCw, 
-  Play, 
   TrendingUp, 
   TrendingDown,
   CheckCircle,
@@ -20,13 +19,11 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Settings as SettingsIcon
 } from 'lucide-react'
 import HomePage from './components/HomePage'
 import Login from './components/Login'
 import Footer from './components/Footer'
 import Pricing from './components/Pricing'
-import Settings from './components/Settings'
 import './App.css'
 
 const API_BASE = '/api'
@@ -154,27 +151,6 @@ function App() {
   // Pagination state for each tab
   const [pagination, setPagination] = useState({})
   const RECORDS_PER_PAGE = 15
-  const [triggering, setTriggering] = useState(false)
-  const [optionChainTriggering, setOptionChainTriggering] = useState(false)
-  const [bankniftyTriggering, setBankniftyTriggering] = useState(false)
-  const [finniftyTriggering, setFinniftyTriggering] = useState(false)
-  const [midcpniftyTriggering, setMidcpniftyTriggering] = useState(false)
-  const [hdfcbankTriggering, setHdfcbankTriggering] = useState(false)
-  const [icicibankTriggering, setIcicibankTriggering] = useState(false)
-  const [sbinTriggering, setSbinTriggering] = useState(false)
-  const [kotakbankTriggering, setKotakbankTriggering] = useState(false)
-  const [axisbankTriggering, setAxisbankTriggering] = useState(false)
-  const [bankbarodaTriggering, setBankbarodaTriggering] = useState(false)
-  const [pnbTriggering, setPnbTriggering] = useState(false)
-  const [canbkTriggering, setCanbkTriggering] = useState(false)
-  const [aubankTriggering, setAubankTriggering] = useState(false)
-  const [indusindbkTriggering, setIndusindbkTriggering] = useState(false)
-  const [idfcfirstbTriggering, setIdfcfirstbTriggering] = useState(false)
-  const [federalbnkTriggering, setFederalbnkTriggering] = useState(false)
-  const [gainersTriggering, setGainersTriggering] = useState(false)
-  const [losersTriggering, setLosersTriggering] = useState(false)
-  const [newsTriggering, setNewsTriggering] = useState(false)
-  const [livemintNewsTriggering, setLivemintNewsTriggering] = useState(false)
 
   // Fetch data for a specific tab only if not already loaded
   const fetchTabData = async (tabName, forceRefresh = false, page = 1) => {
@@ -797,10 +773,7 @@ function App() {
   // Handle tab change - fetch data if not loaded
   const handleTabChange = (tabName) => {
     setActiveTab(tabName)
-    // Don't fetch data for settings tab
-    if (tabName !== 'settings') {
-      fetchTabData(tabName)
-    }
+    fetchTabData(tabName)
     // Close sidebar on mobile after selecting a tab
     if (window.innerWidth <= 768) {
       setSidebarOpen(false)
@@ -819,362 +792,6 @@ function App() {
     }
   }
 
-  const handleTrigger = async () => {
-    setTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/trigger`)
-      if (res.data.success) {
-        alert('✅ FII/DII Data collection completed successfully!')
-        setTimeout(() => fetchTabData('fiidii', true), 2000)
-      } else {
-        alert('❌ Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setTriggering(false)
-    }
-  }
-
-  const handleOptionChainTrigger = async () => {
-    setOptionChainTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/option-chain/trigger`)
-      if (res.data.success) {
-        alert('✅ NIFTY Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('option-chain', true), 2000)
-      } else {
-        alert('❌ NIFTY Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setOptionChainTriggering(false)
-    }
-  }
-
-  const handleBankniftyTrigger = async () => {
-    setBankniftyTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/banknifty/trigger`)
-      if (res.data.success) {
-        alert('✅ BankNifty Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('banknifty', true), 2000)
-      } else {
-        alert('❌ BankNifty Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setBankniftyTriggering(false)
-    }
-  }
-
-  const handleFinniftyTrigger = async () => {
-    setFinniftyTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/finnifty/trigger`)
-      if (res.data.success) {
-        alert('✅ Finnifty Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('finnifty', true), 2000)
-      } else {
-        alert('❌ Finnifty Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setFinniftyTriggering(false)
-    }
-  }
-
-  const handleMidcpniftyTrigger = async () => {
-    setMidcpniftyTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/midcpnifty/trigger`)
-      if (res.data.success) {
-        alert('✅ MidcapNifty Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('midcpnifty', true), 2000)
-      } else {
-        alert('❌ MidcapNifty Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setMidcpniftyTriggering(false)
-    }
-  }
-
-  const handleHdfcbankTrigger = async () => {
-    setHdfcbankTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/hdfcbank/trigger`)
-      if (res.data.success) {
-        alert('✅ HDFC Bank Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('hdfcbank', true), 2000)
-      } else {
-        alert('❌ HDFC Bank Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setHdfcbankTriggering(false)
-    }
-  }
-
-  const handleIcicibankTrigger = async () => {
-    setIcicibankTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/icicibank/trigger`)
-      if (res.data.success) {
-        alert('✅ ICICI Bank Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('icicibank', true), 2000)
-      } else {
-        alert('❌ ICICI Bank Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setIcicibankTriggering(false)
-    }
-  }
-
-  const handleSbinTrigger = async () => {
-    setSbinTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/sbin/trigger`)
-      if (res.data.success) {
-        alert('✅ SBIN Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('sbin', true), 2000)
-      } else {
-        alert('❌ SBIN Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setSbinTriggering(false)
-    }
-  }
-
-  const handleKotakbankTrigger = async () => {
-    setKotakbankTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/kotakbank/trigger`)
-      if (res.data.success) {
-        alert('✅ Kotak Bank Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('kotakbank', true), 2000)
-      } else {
-        alert('❌ Kotak Bank Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setKotakbankTriggering(false)
-    }
-  }
-
-  const handleAxisbankTrigger = async () => {
-    setAxisbankTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/axisbank/trigger`)
-      if (res.data.success) {
-        alert('✅ Axis Bank Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('axisbank', true), 2000)
-      } else {
-        alert('❌ Axis Bank Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setAxisbankTriggering(false)
-    }
-  }
-
-  const handleBankbarodaTrigger = async () => {
-    setBankbarodaTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/bankbaroda/trigger`)
-      if (res.data.success) {
-        alert('✅ Bank of Baroda Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('bankbaroda', true), 2000)
-      } else {
-        alert('❌ Bank of Baroda Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setBankbarodaTriggering(false)
-    }
-  }
-
-  const handlePnbTrigger = async () => {
-    setPnbTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/pnb/trigger`)
-      if (res.data.success) {
-        alert('✅ PNB Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('pnb', true), 2000)
-      } else {
-        alert('❌ PNB Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setPnbTriggering(false)
-    }
-  }
-
-  const handleCanbkTrigger = async () => {
-    setCanbkTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/canbk/trigger`)
-      if (res.data.success) {
-        alert('✅ CANBK Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('canbk', true), 2000)
-      } else {
-        alert('❌ CANBK Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setCanbkTriggering(false)
-    }
-  }
-
-  const handleAubankTrigger = async () => {
-    setAubankTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/aubank/trigger`)
-      if (res.data.success) {
-        alert('✅ AUBANK Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('aubank', true), 2000)
-      } else {
-        alert('❌ AUBANK Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setAubankTriggering(false)
-    }
-  }
-
-  const handleIndusindbkTrigger = async () => {
-    setIndusindbkTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/indusindbk/trigger`)
-      if (res.data.success) {
-        alert('✅ INDUSINDBK Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('indusindbk', true), 2000)
-      } else {
-        alert('❌ INDUSINDBK Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setIndusindbkTriggering(false)
-    }
-  }
-
-  const handleIdfcfirstbTrigger = async () => {
-    setIdfcfirstbTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/idfcfirstb/trigger`)
-      if (res.data.success) {
-        alert('✅ IDFCFIRSTB Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('idfcfirstb', true), 2000)
-      } else {
-        alert('❌ IDFCFIRSTB Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setIdfcfirstbTriggering(false)
-    }
-  }
-
-  const handleFederalbnkTrigger = async () => {
-    setFederalbnkTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/federalbnk/trigger`)
-      if (res.data.success) {
-        alert('✅ FEDERALBNK Option Chain Data collection completed successfully!')
-        setTimeout(() => fetchTabData('federalbnk', true), 2000)
-      } else {
-        alert('❌ FEDERALBNK Option Chain Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setFederalbnkTriggering(false)
-    }
-  }
-
-  const handleGainersTrigger = async () => {
-    setGainersTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/gainers/trigger`)
-      if (res.data.success) {
-        alert('✅ Top 20 Gainers Data collection completed successfully!')
-        setTimeout(() => fetchTabData('gainers', true), 2000)
-      } else {
-        alert('❌ Top 20 Gainers Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setGainersTriggering(false)
-    }
-  }
-
-  const handleLosersTrigger = async () => {
-    setLosersTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/losers/trigger`)
-      if (res.data.success) {
-        alert('✅ Top 20 Losers Data collection completed successfully!')
-        setTimeout(() => fetchTabData('losers', true), 2000)
-      } else {
-        alert('❌ Top 20 Losers Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setLosersTriggering(false)
-    }
-  }
-
-  const handleNewsTrigger = async () => {
-    setNewsTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/news/trigger`)
-      if (res.data.success) {
-        alert('✅ News Data collection completed successfully!')
-        setTimeout(() => fetchTabData('news', true), 2000)
-      } else {
-        alert('❌ News Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setNewsTriggering(false)
-    }
-  }
-
-  const handleLivemintNewsTrigger = async () => {
-    setLivemintNewsTriggering(true)
-    try {
-      const res = await axios.post(`${API_BASE}/livemint-news/trigger`)
-      if (res.data.success) {
-        alert('✅ LiveMint News Data collection completed successfully!')
-        setTimeout(() => fetchTabData('livemint-news', true), 2000)
-      } else {
-        alert('❌ LiveMint News Data collection failed: ' + (res.data.error || res.data.message))
-      }
-    } catch (error) {
-      alert('❌ Error: ' + error.message)
-    } finally {
-      setLivemintNewsTriggering(false)
-    }
-  }
 
 
   const getSentimentColor = (sentiment) => {
@@ -1399,16 +1016,6 @@ function App() {
               <Home size={20} />
               Home
             </li>
-            <li 
-              className={`sidebar-item ${activeTab === 'settings' ? 'active' : ''}`}
-              onClick={() => {
-                handleTabChange('settings')
-                setSidebarOpen(false)
-              }}
-            >
-              <SettingsIcon size={20} />
-              Settings
-            </li>
           </ul>
         </div>
         <div className="sidebar-section">
@@ -1625,14 +1232,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handleTrigger} 
-                  className="btn btn-primary"
-                  disabled={triggering}
-                >
-                  <Play size={18} />
-                  {triggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -1769,14 +1368,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handleOptionChainTrigger} 
-                  className="btn btn-primary"
-                  disabled={optionChainTriggering}
-                >
-                  <Play size={18} />
-                  {optionChainTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -1898,14 +1489,6 @@ function App() {
                 >
                   <RefreshCw size={18} />
                   Refresh Status
-                </button>
-                <button 
-                  onClick={handleBankniftyTrigger} 
-                  className="btn btn-primary"
-                  disabled={bankniftyTriggering}
-                >
-                  <Play size={18} />
-                  {bankniftyTriggering ? 'Processing...' : 'Trigger Collection Now'}
                 </button>
               </div>
             </div>
@@ -2029,14 +1612,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handleFinniftyTrigger} 
-                  className="btn btn-primary"
-                  disabled={finniftyTriggering}
-                >
-                  <Play size={18} />
-                  {finniftyTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -2158,14 +1733,6 @@ function App() {
                 >
                   <RefreshCw size={18} />
                   Refresh Status
-                </button>
-                <button 
-                  onClick={handleMidcpniftyTrigger} 
-                  className="btn btn-primary"
-                  disabled={midcpniftyTriggering}
-                >
-                  <Play size={18} />
-                  {midcpniftyTriggering ? 'Processing...' : 'Trigger Collection Now'}
                 </button>
               </div>
             </div>
@@ -2289,14 +1856,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handleHdfcbankTrigger} 
-                  className="btn btn-primary"
-                  disabled={hdfcbankTriggering}
-                >
-                  <Play size={18} />
-                  {hdfcbankTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -2418,14 +1977,6 @@ function App() {
                 >
                   <RefreshCw size={18} />
                   Refresh Status
-                </button>
-                <button 
-                  onClick={handleIcicibankTrigger} 
-                  className="btn btn-primary"
-                  disabled={icicibankTriggering}
-                >
-                  <Play size={18} />
-                  {icicibankTriggering ? 'Processing...' : 'Trigger Collection Now'}
                 </button>
               </div>
             </div>
@@ -2549,14 +2100,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handleSbinTrigger} 
-                  className="btn btn-primary"
-                  disabled={sbinTriggering}
-                >
-                  <Play size={18} />
-                  {sbinTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -2678,14 +2221,6 @@ function App() {
                 >
                   <RefreshCw size={18} />
                   Refresh Status
-                </button>
-                <button 
-                  onClick={handleKotakbankTrigger} 
-                  className="btn btn-primary"
-                  disabled={kotakbankTriggering}
-                >
-                  <Play size={18} />
-                  {kotakbankTriggering ? 'Processing...' : 'Trigger Collection Now'}
                 </button>
               </div>
             </div>
@@ -2809,14 +2344,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handleAxisbankTrigger} 
-                  className="btn btn-primary"
-                  disabled={axisbankTriggering}
-                >
-                  <Play size={18} />
-                  {axisbankTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -2938,14 +2465,6 @@ function App() {
                 >
                   <RefreshCw size={18} />
                   Refresh Status
-                </button>
-                <button 
-                  onClick={handleBankbarodaTrigger} 
-                  className="btn btn-primary"
-                  disabled={bankbarodaTriggering}
-                >
-                  <Play size={18} />
-                  {bankbarodaTriggering ? 'Processing...' : 'Trigger Collection Now'}
                 </button>
               </div>
             </div>
@@ -3069,14 +2588,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handlePnbTrigger} 
-                  className="btn btn-primary"
-                  disabled={pnbTriggering}
-                >
-                  <Play size={18} />
-                  {pnbTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -3198,14 +2709,6 @@ function App() {
                 >
                   <RefreshCw size={18} />
                   Refresh Status
-                </button>
-                <button 
-                  onClick={handleCanbkTrigger} 
-                  className="btn btn-primary"
-                  disabled={canbkTriggering}
-                >
-                  <Play size={18} />
-                  {canbkTriggering ? 'Processing...' : 'Trigger Collection Now'}
                 </button>
               </div>
             </div>
@@ -3329,14 +2832,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handleAubankTrigger} 
-                  className="btn btn-primary"
-                  disabled={aubankTriggering}
-                >
-                  <Play size={18} />
-                  {aubankTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -3458,14 +2953,6 @@ function App() {
                 >
                   <RefreshCw size={18} />
                   Refresh Status
-                </button>
-                <button 
-                  onClick={handleIndusindbkTrigger} 
-                  className="btn btn-primary"
-                  disabled={indusindbkTriggering}
-                >
-                  <Play size={18} />
-                  {indusindbkTriggering ? 'Processing...' : 'Trigger Collection Now'}
                 </button>
               </div>
             </div>
@@ -3589,14 +3076,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handleIdfcfirstbTrigger} 
-                  className="btn btn-primary"
-                  disabled={idfcfirstbTriggering}
-                >
-                  <Play size={18} />
-                  {idfcfirstbTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -3719,14 +3198,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handleFederalbnkTrigger} 
-                  className="btn btn-primary"
-                  disabled={federalbnkTriggering}
-                >
-                  <Play size={18} />
-                  {federalbnkTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -3848,14 +3319,6 @@ function App() {
                 >
                   <RefreshCw size={18} />
                   Refresh Status
-                </button>
-                <button 
-                  onClick={handleGainersTrigger} 
-                  className="btn btn-primary"
-                  disabled={gainersTriggering}
-                >
-                  <Play size={18} />
-                  {gainersTriggering ? 'Processing...' : 'Trigger Collection Now'}
                 </button>
               </div>
             </div>
@@ -3988,14 +3451,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handleLosersTrigger} 
-                  className="btn btn-primary"
-                  disabled={losersTriggering}
-                >
-                  <Play size={18} />
-                  {losersTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -4127,14 +3582,6 @@ function App() {
                   <RefreshCw size={18} />
                   Refresh Status
                 </button>
-                <button 
-                  onClick={handleNewsTrigger} 
-                  className="btn btn-primary"
-                  disabled={newsTriggering}
-                >
-                  <Play size={18} />
-                  {newsTriggering ? 'Processing...' : 'Trigger Collection Now'}
-                </button>
               </div>
             </div>
 
@@ -4254,8 +3701,6 @@ function App() {
               <Pagination tabName="news" />
             </div>
           </>
-        ) : activeTab === 'settings' ? (
-          <Settings authToken={authToken} />
         ) : activeTab === 'livemint-news' ? (
           <>
             {/* LiveMint News Collector Status Card */}
@@ -4301,14 +3746,6 @@ function App() {
                 >
                   <RefreshCw size={18} />
                   Refresh Status
-                </button>
-                <button 
-                  onClick={handleLivemintNewsTrigger} 
-                  className="btn btn-primary"
-                  disabled={livemintNewsTriggering}
-                >
-                  <Play size={18} />
-                  {livemintNewsTriggering ? 'Processing...' : 'Trigger Collection Now'}
                 </button>
               </div>
             </div>

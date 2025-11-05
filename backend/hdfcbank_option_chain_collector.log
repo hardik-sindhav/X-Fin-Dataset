@@ -1,0 +1,4 @@
+2025-11-06 00:08:13,889 - redis_expiry_cache - ERROR - Failed to connect to Redis: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2025-11-06 00:08:13,889 - redis_expiry_cache - WARNING - Redis connection failed. Expiry dates will be fetched from API each time.
+2025-11-06 00:08:13,922 - nse_hdfcbank_option_chain_collector - INFO - Successfully connected to MongoDB at localhost:27017
+2025-11-06 00:08:13,925 - nse_hdfcbank_option_chain_collector - INFO - MongoDB connection closed

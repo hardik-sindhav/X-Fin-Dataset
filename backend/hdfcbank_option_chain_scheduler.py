@@ -89,19 +89,21 @@ def run_collector():
     
     # Check minimum interval
     now = datetime.now()
-    if last_run_time:
-        time_since_last_run = (now - last_run_time).total_seconds()
-        if time_since_last_run < min_interval_seconds:
-            execution_lock.release()
-            logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
-            return
+    config = get_scheduler_config()
+    interval_minutes = config.get("interval_minutes", 3)
+    min_interval_seconds = interval_minutes * 60 - 10  # Allow 10 seconds buffer
     
     collector = None
+    lock_acquired = True
     try:
+        if last_run_time:
+            time_since_last_run = (now - last_run_time).total_seconds()
+            if time_since_last_run < min_interval_seconds:
+                logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
+                return
         # Check if it's market hours before running
         if not is_market_hours(now):
             logger.info(f"Outside market hours. Current time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-            execution_lock.release()
             return
         
         logger.info("=" * 60)
@@ -143,18 +145,30 @@ def run_collector():
     finally:
         if collector:
             collector.close()
-        execution_lock.release()
+        if lock_acquired:
+            execution_lock.release()
         logger.info("=" * 60)
 
 
 def main():
     """Setup and run the scheduler"""
-    # Starting NSE HDFC Bank Option Chain Data Collector Scheduler
-    # Schedule: Monday to Friday from {START_TIME.strftime('%H:%M')} to {END_TIME.strftime('%H:%M')}, every {INTERVAL_MINUTES} minutes
+    config = get_scheduler_config()
+    interval = config.get("interval_minutes", 3)
+    start_time = config.get("start_time", "09:15")
+    end_time = config.get("end_time", "15:30")
+    enabled = config.get("enabled", True)
     
-    # Schedule job to run every 3 minutes during weekdays
-    # We'll check market hours inside the run_collector function
-    schedule.every(INTERVAL_MINUTES).minutes.do(run_collector)
+    logger.info("Starting NSE HDFC Bank Option Chain Data Collector Scheduler")
+    logger.info(f"Schedule: Monday to Friday from {start_time} to {end_time}, every {interval} minutes")
+    logger.info(f"Enabled: {enabled}")
+    
+    if not enabled:
+        logger.warning("Scheduler is disabled in configuration")
+        return
+    
+    # Schedule job to run at specified interval
+    # We'll check market hours and holidays inside the run_collector function
+    schedule.every(interval).minutes.do(run_collector)
     
     # Scheduler configured. Waiting for scheduled times...
     

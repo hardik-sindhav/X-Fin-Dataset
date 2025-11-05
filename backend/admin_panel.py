@@ -5,6 +5,7 @@ Web interface to monitor cronjob status and view data
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from bson import ObjectId
 from nse_fiidii_collector import NSEDataCollector
 from nse_option_chain_collector import NSEOptionChainCollector
 from scheduler_config import (
@@ -80,39 +81,67 @@ NEWS_COLLECTOR_STATUS_FILE = 'news_collector_scheduler_status.json'
 LIVEMINT_NEWS_STATUS_FILE = 'livemint_news_scheduler_status.json'
 
 
+def get_next_valid_date(start_date, max_days=30):
+    """
+    Get next valid date (weekday and not a holiday)
+    start_date: date to start checking from
+    max_days: maximum days to check ahead
+    Returns: next valid date or None if not found
+    """
+    from datetime import date
+    check_date = start_date
+    for _ in range(max_days):
+        # Check if it's a weekday (Monday=0 to Friday=4)
+        if check_date.weekday() < 5:
+            # Check if it's not a holiday
+            if not is_holiday(check_date):
+                return check_date
+        check_date = check_date + timedelta(days=1)
+    return None
+
+
 def get_next_run_time():
-    """Calculate next scheduled run time"""
+    """Calculate next scheduled run time for FII/DII using config"""
+    from scheduler_config import get_config_for_scheduler
+    config = get_config_for_scheduler("fiidii")
+    if not config or not config.get("enabled", True):
+        return None
+    
     now = datetime.now()
     current_time = now.time()
-    target_time = datetime.strptime("17:00", "%H:%M").time()
+    start_time_str = config.get("start_time", "17:00")
+    target_time = datetime.strptime(start_time_str, "%H:%M").time()
     
     # Get current day of week (0 = Monday, 6 = Sunday)
     current_weekday = now.weekday()
     
-    # Check if today is a weekday (Monday=0 to Friday=4)
-    if current_weekday < 5:  # Monday to Friday
-        # If current time is before 5 PM today, next run is today at 5 PM
+    # Check if today is a weekday and not a holiday
+    if current_weekday < 5 and not is_holiday(now.date()):  # Monday to Friday, not holiday
+        # If current time is before target time today, next run is today
         if current_time < target_time:
             next_run = datetime.combine(now.date(), target_time)
             return next_run
         else:
-            # Today after 5 PM, find next weekday
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:  # Skip weekends
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, target_time)
-            return next_run
+            # Today after target time, find next valid weekday
+            next_date = get_next_valid_date(now.date() + timedelta(days=1))
+            if next_date:
+                next_run = datetime.combine(next_date, target_time)
+                return next_run
     
-    # Current day is weekend, find next Monday
-    days_until_monday = (7 - current_weekday) % 7
-    if days_until_monday == 0:
-        days_until_monday = 7  # If it's Sunday, next Monday is 1 day away
+    # Current day is weekend or holiday, find next valid date
+    days_ahead = 1
+    if current_weekday >= 5:  # Weekend
+        days_until_monday = (7 - current_weekday) % 7
+        if days_until_monday == 0:
+            days_until_monday = 7
+        days_ahead = days_until_monday
     
-    next_date = now.date() + timedelta(days=days_until_monday)
-    next_run = datetime.combine(next_date, target_time)
+    next_date = get_next_valid_date(now.date() + timedelta(days=days_ahead))
+    if next_date:
+        next_run = datetime.combine(next_date, target_time)
+        return next_run
     
-    return next_run
+    return None
 
 
 def check_scheduler_running(scheduler_file='cronjob_scheduler.py'):
@@ -213,6 +242,12 @@ def token_required(f):
     return decorated
 
 
+@app.route("/")
+def home():
+    """Root endpoint to check if API is running"""
+    return jsonify({"status": "ok", "message": "API is running"})
+
+
 @app.route('/api/login', methods=['POST'])
 def api_login():
     """API endpoint for user login - returns JWT token"""
@@ -273,24 +308,82 @@ def api_status():
     return jsonify(status)
 
 
+@app.route('/api/data/<record_id>', methods=['DELETE'])
+@token_required
+def api_delete_data(record_id):
+    """API endpoint to delete a specific FII/DII record"""
+    try:
+        collector = NSEDataCollector()
+        
+        # Validate ObjectId
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        # Delete the record
+        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+        
+        collector.close()
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                "success": False,
+                "error": "Record not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "message": "Record deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 @app.route('/api/data')
 @token_required
 def api_data():
-    """API endpoint to get collected data with pagination"""
+    """API endpoint to get collected data with pagination and date filtering"""
     try:
         collector = NSEDataCollector()
         
         # Get pagination parameters
         page, limit = get_pagination_params()
         
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+                query_filter["date"] = {"$gte": start_date}
+            except ValueError:
+                pass
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+                if "date" in query_filter:
+                    query_filter["date"]["$lte"] = end_date
+                else:
+                    query_filter["date"] = {"$lte": end_date}
+            except ValueError:
+                pass
+        
         # Calculate skip
         skip = (page - 1) * limit
         
-        # Get total count
-        total_count = collector.collection.count_documents({})
+        # Get total count with filter
+        total_count = collector.collection.count_documents(query_filter)
         
         # Get paginated records sorted by date (newest first)
-        records = list(collector.collection.find().sort("date", -1).skip(skip).limit(limit))
+        records = list(collector.collection.find(query_filter).sort("date", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -391,78 +484,121 @@ def api_trigger():
 
 # Option Chain Endpoints
 
-def get_option_chain_next_run_time():
-    """Calculate next scheduled run time for option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
+def get_interval_scheduler_next_run_time(scheduler_type):
+    """
+    Calculate next scheduled run time for interval-based schedulers using config
+    scheduler_type: 'indices', 'banks', 'gainers_losers', 'news'
+    """
+    from scheduler_config import get_config_for_scheduler
+    config = get_config_for_scheduler(scheduler_type)
+    if not config or not config.get("enabled", True):
+        return None
+    
     now = datetime.now()
     current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
+    
+    # Get config values
+    start_time_str = config.get("start_time", "09:15")
+    end_time_str = config.get("end_time", "15:30")
+    interval_minutes = config.get("interval_minutes", 3)
+    
+    # Parse times
+    start_time = datetime.strptime(start_time_str, "%H:%M").time()
+    end_time = datetime.strptime(end_time_str, "%H:%M").time()
     
     # Get current day of week (0 = Monday, 6 = Sunday)
     current_weekday = now.weekday()
     
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
+    # Check if today is a holiday
+    today_is_holiday = is_holiday(now.date())
     
-    # If before market opens today, return today 09:15
+    # If it's a weekend or holiday, find next valid date
+    if current_weekday >= 5 or today_is_holiday:  # Weekend or holiday
+        days_until_valid = 1
+        if current_weekday >= 5:  # Weekend
+            days_until_monday = (7 - current_weekday) % 7
+            if days_until_monday == 0:
+                days_until_monday = 7
+            days_until_valid = days_until_monday
+        
+        next_date = get_next_valid_date(now.date() + timedelta(days=days_until_valid))
+        if next_date:
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return None
+    
+    # If before market opens today (and today is not a holiday), return today at start_time
+    # But we need to double-check that today is not a holiday (in case it was just added)
     if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
+        if not is_holiday(now.date()):
+            next_run = datetime.combine(now.date(), start_time)
+            return next_run
+        else:
+            # Today is a holiday, find next valid date
+            next_date = get_next_valid_date(now.date() + timedelta(days=1))
+            if next_date:
+                next_run = datetime.combine(next_date, start_time)
+                return next_run
+            return None
     
-    # If after market closes today, return next weekday 09:15
+    # If after market closes today, return next valid date at start_time
     if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:  # Skip weekends
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
+        next_date = get_next_valid_date(now.date() + timedelta(days=1))
+        if next_date:
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return None
     
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    # Valid intervals: 09:15, 09:18, 09:21, ..., 03:27, 03:30
-    
-    # Calculate total minutes from 09:15:00
+    # We're within market hours - calculate next interval
     start_datetime = datetime.combine(now.date(), start_time)
     minutes_from_start = int((now - start_datetime).total_seconds() / 60)
     
-    # Calculate which interval we're in (0 = 09:15, 1 = 09:18, 2 = 09:21, etc.)
-    current_interval = minutes_from_start // 3
+    # Calculate which interval we're in
+    current_interval = minutes_from_start // interval_minutes
     
     # Calculate the next interval
     next_interval = current_interval + 1
+    next_minutes_from_start = next_interval * interval_minutes
     
-    # Convert next interval back to time
-    next_minutes_from_start = next_interval * 3
-    next_total_minutes = 15 + next_minutes_from_start  # 15 minutes from hour 9 = 09:15
-    
-    # Convert to hour and minute
-    next_hour = 9 + (next_total_minutes // 60)
-    next_minute = next_total_minutes % 60
-    
-    # Check if we've exceeded 15:30 (03:30 PM)
-    # 15:30 = 15 hours * 60 + 30 minutes = 930 minutes from midnight
-    # 09:15 = 9 hours * 60 + 15 minutes = 555 minutes from midnight
-    # Maximum intervals from 09:15: (930 - 555) / 3 = 125 intervals
-    max_minutes_from_start = (15 * 60 + 30) - (9 * 60 + 15)  # 375 minutes = 125 intervals
+    # Calculate max minutes from start
+    start_total_minutes = start_time.hour * 60 + start_time.minute
+    end_total_minutes = end_time.hour * 60 + end_time.minute
+    max_minutes_from_start = end_total_minutes - start_total_minutes
     
     if next_minutes_from_start > max_minutes_from_start:
-        # Market closed, go to next weekday 09:15
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
+        # Market closed, go to next valid date at start_time
+        next_date = get_next_valid_date(now.date() + timedelta(days=1))
+        if next_date:
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return None
     
-    next_run = datetime.combine(now.date(), dt_time(next_hour, next_minute))
+    # Calculate next time
+    next_total_minutes = start_total_minutes + next_minutes_from_start
+    next_hour = next_total_minutes // 60
+    next_minute = next_total_minutes % 60
+    
+    # Create the next run datetime on today's date
+    next_run_date = now.date()
+    next_run_time = dt_time(next_hour, next_minute)
+    next_run = datetime.combine(next_run_date, next_run_time)
+    
+    # Double-check that the calculated date is not a holiday
+    # (This handles cases where a holiday was added after the initial check)
+    if is_holiday(next_run_date):
+        # If the calculated time is on a holiday, find next valid date
+        next_date = get_next_valid_date(next_run_date + timedelta(days=1))
+        if next_date:
+            next_run = datetime.combine(next_date, start_time)
+            return next_run
+        return None
+    
     return next_run
+
+
+def get_option_chain_next_run_time():
+    """Calculate next scheduled run time for option chain using config"""
+    return get_interval_scheduler_next_run_time("indices")
 
 
 def get_option_chain_status():
@@ -511,23 +647,67 @@ def api_option_chain_status():
     return jsonify(status)
 
 
+@app.route('/api/option-chain/expiry')
+def api_option_chain_expiry():
+    """API endpoint to get current NIFTY expiry date"""
+    try:
+        collector = NSEOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "NIFTY"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "NIFTY"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "NIFTY"
+        }), 500
+
+
 @app.route('/api/option-chain/data')
 def api_option_chain_data():
-    """API endpoint to get collected option chain data with pagination"""
+    """API endpoint to get collected option chain data with pagination and date filtering"""
     try:
         collector = NSEOptionChainCollector()
         
         # Get pagination parameters
         page, limit = get_pagination_params()
         
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["records.timestamp"] = {"$gte": start_date}
+        if end_date:
+            if "records.timestamp" in query_filter:
+                query_filter["records.timestamp"]["$lte"] = end_date
+            else:
+                query_filter["records.timestamp"] = {"$lte": end_date}
+        
         # Calculate skip
         skip = (page - 1) * limit
         
-        # Get total count
-        total_count = collector.collection.count_documents({})
+        # Get total count with filter
+        total_count = collector.collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collector.collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -630,12 +810,47 @@ def api_option_chain_trigger():
         }), 500
 
 
+@app.route('/api/option-chain/data/<record_id>', methods=['DELETE'])
+@token_required
+def api_delete_option_chain_data(record_id):
+    """API endpoint to delete a specific option chain record"""
+    try:
+        collector = NSEOptionChainCollector()
+        
+        # Validate ObjectId
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        # Delete the record
+        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+        
+        collector.close()
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                "success": False,
+                "error": "Record not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "message": "Record deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # BankNifty Option Chain Endpoints
 
 def get_banknifty_option_chain_next_run_time():
-    """Calculate next scheduled run time for BankNifty option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    # Same logic as NIFTY option chain
-    return get_option_chain_next_run_time()
+    """Calculate next scheduled run time for BankNifty option chain using config"""
+    return get_interval_scheduler_next_run_time("indices")
 
 
 def get_banknifty_option_chain_status():
@@ -686,21 +901,35 @@ def api_banknifty_status():
 
 @app.route('/api/banknifty/data')
 def api_banknifty_data():
-    """API endpoint to get collected BankNifty option chain data with pagination"""
+    """API endpoint to get collected BankNifty option chain data with pagination and date filtering"""
     try:
         collector = NSEBankNiftyOptionChainCollector()
         
         # Get pagination parameters
         page, limit = get_pagination_params()
         
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["records.timestamp"] = {"$gte": start_date}
+        if end_date:
+            if "records.timestamp" in query_filter:
+                query_filter["records.timestamp"]["$lte"] = end_date
+            else:
+                query_filter["records.timestamp"] = {"$lte": end_date}
+        
         # Calculate skip
         skip = (page - 1) * limit
         
-        # Get total count
-        total_count = collector.collection.count_documents({})
+        # Get total count with filter
+        total_count = collector.collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collector.collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -736,6 +965,36 @@ def api_banknifty_data():
         return jsonify({
             "success": False,
             "error": str(e)
+        }), 500
+
+
+@app.route('/api/banknifty/expiry')
+def api_banknifty_expiry():
+    """API endpoint to get current BankNifty expiry date"""
+    try:
+        collector = NSEBankNiftyOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "BANKNIFTY"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "BANKNIFTY"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "BANKNIFTY"
         }), 500
 
 
@@ -803,12 +1062,44 @@ def api_banknifty_trigger():
         }), 500
 
 
+@app.route('/api/banknifty/data/<record_id>', methods=['DELETE'])
+@token_required
+def api_delete_banknifty_data(record_id):
+    """API endpoint to delete a specific BankNifty option chain record"""
+    try:
+        collector = NSEBankNiftyOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+        collector.close()
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                "success": False,
+                "error": "Record not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "message": "Record deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # Finnifty Option Chain Endpoints
 
 def get_finnifty_option_chain_next_run_time():
-    """Calculate next scheduled run time for Finnifty option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    # Same logic as NIFTY option chain
-    return get_option_chain_next_run_time()
+    """Calculate next scheduled run time for Finnifty option chain using config"""
+    return get_interval_scheduler_next_run_time("indices")
 
 
 def get_finnifty_option_chain_status():
@@ -860,21 +1151,35 @@ def api_finnifty_status():
 @app.route('/api/finnifty/data')
 @token_required
 def api_finnifty_data():
-    """API endpoint to get collected Finnifty option chain data with pagination"""
+    """API endpoint to get collected Finnifty option chain data with pagination and date filtering"""
     try:
         collector = NSEFinniftyOptionChainCollector()
         
         # Get pagination parameters
         page, limit = get_pagination_params()
         
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["records.timestamp"] = {"$gte": start_date}
+        if end_date:
+            if "records.timestamp" in query_filter:
+                query_filter["records.timestamp"]["$lte"] = end_date
+            else:
+                query_filter["records.timestamp"] = {"$lte": end_date}
+        
         # Calculate skip
         skip = (page - 1) * limit
         
-        # Get total count
-        total_count = collector.collection.count_documents({})
+        # Get total count with filter
+        total_count = collector.collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collector.collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -910,6 +1215,36 @@ def api_finnifty_data():
         return jsonify({
             "success": False,
             "error": str(e)
+        }), 500
+
+
+@app.route('/api/finnifty/expiry')
+def api_finnifty_expiry():
+    """API endpoint to get current Finnifty expiry date"""
+    try:
+        collector = NSEFinniftyOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "FINNIFTY"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "FINNIFTY"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "FINNIFTY"
         }), 500
 
 
@@ -977,12 +1312,44 @@ def api_finnifty_trigger():
         }), 500
 
 
+@app.route('/api/finnifty/data/<record_id>', methods=['DELETE'])
+@token_required
+def api_delete_finnifty_data(record_id):
+    """API endpoint to delete a specific Finnifty option chain record"""
+    try:
+        collector = NSEFinniftyOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+        collector.close()
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                "success": False,
+                "error": "Record not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "message": "Record deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # MidcapNifty Option Chain Endpoints
 
 def get_midcpnifty_option_chain_next_run_time():
-    """Calculate next scheduled run time for MidcapNifty option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    # Same logic as NIFTY option chain
-    return get_option_chain_next_run_time()
+    """Calculate next scheduled run time for MidcapNifty option chain using config"""
+    return get_interval_scheduler_next_run_time("indices")
 
 
 def get_midcpnifty_option_chain_status():
@@ -1034,18 +1401,33 @@ def api_midcpnifty_status():
 @app.route('/api/midcpnifty/data')
 @token_required
 def api_midcpnifty_data():
-    """API endpoint to get collected MidcapNifty option chain data with pagination"""
+    """API endpoint to get collected MidcapNifty option chain data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["records.timestamp"] = {"$gte": start_date}
+        if end_date:
+            if "records.timestamp" in query_filter:
+                query_filter["records.timestamp"]["$lte"] = end_date
+            else:
+                query_filter["records.timestamp"] = {"$lte": end_date}
+        
         skip = (page - 1) * limit
         
         collector = NSEMidcapNiftyOptionChainCollector()
         
-        # Get total count
-        total_count = collector.collection.count_documents({})
+        # Get total count with filter
+        total_count = collector.collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collector.collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1089,6 +1471,36 @@ def api_midcpnifty_data():
         return jsonify({
             "success": False,
             "error": str(e)
+        }), 500
+
+
+@app.route('/api/midcpnifty/expiry')
+def api_midcpnifty_expiry():
+    """API endpoint to get current MidcapNifty expiry date"""
+    try:
+        collector = NSEMidcapNiftyOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "MIDCPNIFTY"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "MIDCPNIFTY"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "MIDCPNIFTY"
         }), 500
 
 
@@ -1158,69 +1570,44 @@ def api_midcpnifty_trigger():
         }), 500
 
 
+@app.route('/api/midcpnifty/data/<record_id>', methods=['DELETE'])
+@token_required
+def api_delete_midcpnifty_data(record_id):
+    """API endpoint to delete a specific MidcapNifty option chain record"""
+    try:
+        collector = NSEMidcapNiftyOptionChainCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+        collector.close()
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                "success": False,
+                "error": "Record not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "message": "Record deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # HDFC Bank Option Chain Endpoints
 
 def get_hdfcbank_option_chain_next_run_time():
-    """Calculate next scheduled run time for HDFC Bank option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for HDFC Bank option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_hdfcbank_option_chain_status():
@@ -1325,6 +1712,36 @@ def api_hdfcbank_data():
         }), 500
 
 
+@app.route('/api/hdfcbank/expiry')
+def api_hdfcbank_expiry():
+    """API endpoint to get current HDFC Bank expiry date"""
+    try:
+        collector = NSEHDFCBankOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "HDFCBANK"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "HDFCBANK"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "HDFCBANK"
+        }), 500
+
+
 @app.route('/api/hdfcbank/stats')
 def api_hdfcbank_stats():
     """API endpoint to get HDFC Bank option chain statistics"""
@@ -1393,66 +1810,8 @@ def api_hdfcbank_trigger():
 # ICICI Bank Option Chain Endpoints
 
 def get_icicibank_option_chain_next_run_time():
-    """Calculate next scheduled run time for ICICI Bank option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for ICICI Bank option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_icicibank_option_chain_status():
@@ -1557,6 +1916,36 @@ def api_icicibank_data():
         }), 500
 
 
+@app.route('/api/icicibank/expiry')
+def api_icicibank_expiry():
+    """API endpoint to get current ICICI Bank expiry date"""
+    try:
+        collector = NSEICICIBankOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "ICICIBANK"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "ICICIBANK"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "ICICIBANK"
+        }), 500
+
+
 @app.route('/api/icicibank/stats')
 def api_icicibank_stats():
     """API endpoint to get ICICI Bank option chain statistics"""
@@ -1625,66 +2014,8 @@ def api_icicibank_trigger():
 # SBIN Option Chain Endpoints
 
 def get_sbin_option_chain_next_run_time():
-    """Calculate next scheduled run time for SBIN option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for SBIN option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_sbin_option_chain_status():
@@ -1789,6 +2120,36 @@ def api_sbin_data():
         }), 500
 
 
+@app.route('/api/sbin/expiry')
+def api_sbin_expiry():
+    """API endpoint to get current SBIN expiry date"""
+    try:
+        collector = NSESBINOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "SBIN"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "SBIN"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "SBIN"
+        }), 500
+
+
 @app.route('/api/sbin/stats')
 def api_sbin_stats():
     """API endpoint to get SBIN option chain statistics"""
@@ -1857,66 +2218,8 @@ def api_sbin_trigger():
 # Kotak Bank Option Chain Endpoints
 
 def get_kotakbank_option_chain_next_run_time():
-    """Calculate next scheduled run time for Kotak Bank option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for Kotak Bank option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_kotakbank_option_chain_status():
@@ -2021,6 +2324,36 @@ def api_kotakbank_data():
         }), 500
 
 
+@app.route('/api/kotakbank/expiry')
+def api_kotakbank_expiry():
+    """API endpoint to get current Kotak Bank expiry date"""
+    try:
+        collector = NSEKotakBankOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "KOTAKBANK"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "KOTAKBANK"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "KOTAKBANK"
+        }), 500
+
+
 @app.route('/api/kotakbank/stats')
 def api_kotakbank_stats():
     """API endpoint to get Kotak Bank option chain statistics"""
@@ -2089,66 +2422,8 @@ def api_kotakbank_trigger():
 # Axis Bank Option Chain Endpoints
 
 def get_axisbank_option_chain_next_run_time():
-    """Calculate next scheduled run time for Axis Bank option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for Axis Bank option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_axisbank_option_chain_status():
@@ -2253,6 +2528,36 @@ def api_axisbank_data():
         }), 500
 
 
+@app.route('/api/axisbank/expiry')
+def api_axisbank_expiry():
+    """API endpoint to get current Axis Bank expiry date"""
+    try:
+        collector = NSEAxisBankOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "AXISBANK"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "AXISBANK"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "AXISBANK"
+        }), 500
+
+
 @app.route('/api/axisbank/stats')
 def api_axisbank_stats():
     """API endpoint to get Axis Bank option chain statistics"""
@@ -2321,66 +2626,8 @@ def api_axisbank_trigger():
 # Bank of Baroda Option Chain Endpoints
 
 def get_bankbaroda_option_chain_next_run_time():
-    """Calculate next scheduled run time for Bank of Baroda option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for Bank of Baroda option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_bankbaroda_option_chain_status():
@@ -2485,6 +2732,36 @@ def api_bankbaroda_data():
         }), 500
 
 
+@app.route('/api/bankbaroda/expiry')
+def api_bankbaroda_expiry():
+    """API endpoint to get current Bank of Baroda expiry date"""
+    try:
+        collector = NSEBankBarodaOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "BANKBARODA"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "BANKBARODA"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "BANKBARODA"
+        }), 500
+
+
 @app.route('/api/bankbaroda/stats')
 def api_bankbaroda_stats():
     """API endpoint to get Bank of Baroda option chain statistics"""
@@ -2553,66 +2830,8 @@ def api_bankbaroda_trigger():
 # PNB Option Chain Endpoints
 
 def get_pnb_option_chain_next_run_time():
-    """Calculate next scheduled run time for PNB option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for PNB option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_pnb_option_chain_status():
@@ -2717,6 +2936,36 @@ def api_pnb_data():
         }), 500
 
 
+@app.route('/api/pnb/expiry')
+def api_pnb_expiry():
+    """API endpoint to get current PNB expiry date"""
+    try:
+        collector = NSEPNBOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "PNB"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "PNB"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "PNB"
+        }), 500
+
+
 @app.route('/api/pnb/stats')
 def api_pnb_stats():
     """API endpoint to get PNB option chain statistics"""
@@ -2785,66 +3034,8 @@ def api_pnb_trigger():
 # CANBK Option Chain Endpoints
 
 def get_canbk_option_chain_next_run_time():
-    """Calculate next scheduled run time for CANBK option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for CANBK option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_canbk_option_chain_status():
@@ -2949,6 +3140,36 @@ def api_canbk_data():
         }), 500
 
 
+@app.route('/api/canbk/expiry')
+def api_canbk_expiry():
+    """API endpoint to get current CANBK expiry date"""
+    try:
+        collector = NSECANBKOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "CANBK"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "CANBK"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "CANBK"
+        }), 500
+
+
 @app.route('/api/canbk/stats')
 def api_canbk_stats():
     """API endpoint to get CANBK option chain statistics"""
@@ -3017,66 +3238,8 @@ def api_canbk_trigger():
 # AUBANK Option Chain Endpoints
 
 def get_aubank_option_chain_next_run_time():
-    """Calculate next scheduled run time for AUBANK option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for AUBANK option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_aubank_option_chain_status():
@@ -3181,6 +3344,36 @@ def api_aubank_data():
         }), 500
 
 
+@app.route('/api/aubank/expiry')
+def api_aubank_expiry():
+    """API endpoint to get current AUBANK expiry date"""
+    try:
+        collector = NSEAUBANKOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "AUBANK"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "AUBANK"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "AUBANK"
+        }), 500
+
+
 @app.route('/api/aubank/stats')
 def api_aubank_stats():
     """API endpoint to get AUBANK option chain statistics"""
@@ -3249,66 +3442,8 @@ def api_aubank_trigger():
 # INDUSINDBK Option Chain Endpoints
 
 def get_indusindbk_option_chain_next_run_time():
-    """Calculate next scheduled run time for INDUSINDBK option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for INDUSINDBK option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_indusindbk_option_chain_status():
@@ -3413,6 +3548,36 @@ def api_indusindbk_data():
         }), 500
 
 
+@app.route('/api/indusindbk/expiry')
+def api_indusindbk_expiry():
+    """API endpoint to get current INDUSINDBK expiry date"""
+    try:
+        collector = NSEIndusIndBkOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "INDUSINDBK"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "INDUSINDBK"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "INDUSINDBK"
+        }), 500
+
+
 @app.route('/api/indusindbk/stats')
 def api_indusindbk_stats():
     """API endpoint to get INDUSINDBK option chain statistics"""
@@ -3481,66 +3646,8 @@ def api_indusindbk_trigger():
 # IDFCFIRSTB Option Chain Endpoints
 
 def get_idfcfirstb_option_chain_next_run_time():
-    """Calculate next scheduled run time for IDFCFIRSTB option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for IDFCFIRSTB option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_idfcfirstb_option_chain_status():
@@ -3645,6 +3752,36 @@ def api_idfcfirstb_data():
         }), 500
 
 
+@app.route('/api/idfcfirstb/expiry')
+def api_idfcfirstb_expiry():
+    """API endpoint to get current IDFCFIRSTB expiry date"""
+    try:
+        collector = NSEIDFCFIRSTBOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "IDFCFIRSTB"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "IDFCFIRSTB"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "IDFCFIRSTB"
+        }), 500
+
+
 @app.route('/api/idfcfirstb/stats')
 def api_idfcfirstb_stats():
     """API endpoint to get IDFCFIRSTB option chain statistics"""
@@ -3713,66 +3850,8 @@ def api_idfcfirstb_trigger():
 # FEDERALBNK Option Chain Endpoints
 
 def get_federalbnk_option_chain_next_run_time():
-    """Calculate next scheduled run time for FEDERALBNK option chain (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:15
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:15
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:15 to 03:30)
-    # Calculate next 3-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 3) + 1) * 3
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:15
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for FEDERALBNK option chain using config"""
+    return get_interval_scheduler_next_run_time("banks")
 
 
 def get_federalbnk_option_chain_status():
@@ -3877,6 +3956,36 @@ def api_federalbnk_data():
         }), 500
 
 
+@app.route('/api/federalbnk/expiry')
+def api_federalbnk_expiry():
+    """API endpoint to get current FEDERALBNK expiry date"""
+    try:
+        collector = NSEFEDERALBNKOptionChainCollector()
+        expiry = collector.get_current_expiry()
+        collector.close()
+        
+        if expiry:
+            return jsonify({
+                "success": True,
+                "expiry": expiry,
+                "symbol": "FEDERALBNK"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Failed to fetch expiry date",
+                "expiry": None,
+                "symbol": "FEDERALBNK"
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "expiry": None,
+            "symbol": "FEDERALBNK"
+        }), 500
+
+
 @app.route('/api/federalbnk/stats')
 def api_federalbnk_stats():
     """API endpoint to get FEDERALBNK option chain statistics"""
@@ -3945,57 +4054,8 @@ def api_federalbnk_trigger():
 # Top 20 Gainers Endpoints
 
 def get_gainers_next_run_time():
-    """Calculate next scheduled run time for gainers (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=days_until_monday)
-        return next_run
-    
-    # If before market hours, return today at 09:15
-    if current_time < start_time:
-        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0)
-        return next_run
-    
-    # If after market hours, return next day at 09:15
-    if current_time > end_time:
-        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=1)
-        # If next day is Saturday, skip to Monday
-        if next_run.weekday() >= 5:
-            days_until_monday = 7 - next_run.weekday()
-            next_run += timedelta(days=days_until_monday)
-        return next_run
-    
-    # During market hours, return next 3-minute interval
-    current_minute = now.minute
-    # Round up to next 3-minute interval
-    next_minute = ((current_minute // 3) + 1) * 3
-    if next_minute >= 60:
-        next_hour = now.hour + 1
-        next_minute = 0
-        # Check if next hour is after market close
-        if next_hour > end_time.hour or (next_hour == end_time.hour and next_minute > end_time.minute):
-            # Return next day at 09:15
-            next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=1)
-            if next_run.weekday() >= 5:
-                days_until_monday = 7 - next_run.weekday()
-                next_run += timedelta(days=days_until_monday)
-            return next_run
-        next_run = now.replace(hour=next_hour, minute=next_minute, second=0, microsecond=0)
-    else:
-        next_run = now.replace(minute=next_minute, second=0, microsecond=0)
-    
-    return next_run
+    """Calculate next scheduled run time for gainers using config"""
+    return get_interval_scheduler_next_run_time("gainers_losers")
 
 
 def get_gainers_status():
@@ -4047,18 +4107,33 @@ def api_gainers_status():
 @app.route('/api/gainers/data')
 @token_required
 def api_gainers_data():
-    """API endpoint to get collected gainers data"""
+    """API endpoint to get collected gainers data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["timestamp"] = {"$gte": start_date}
+        if end_date:
+            if "timestamp" in query_filter:
+                query_filter["timestamp"]["$lte"] = end_date
+            else:
+                query_filter["timestamp"] = {"$lte": end_date}
+        
         skip = (page - 1) * limit
         
         collector = NSEGainersCollector()
         
-        # Get total count
-        total_count = collector.collection.count_documents({})
+        # Get total count with filter
+        total_count = collector.collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("timestamp", -1).skip(skip).limit(limit))
+        records = list(collector.collection.find(query_filter).sort("timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4181,60 +4256,44 @@ def api_gainers_trigger():
         }), 500
 
 
+@app.route('/api/gainers/data/<record_id>', methods=['DELETE'])
+@token_required
+def api_delete_gainers_data(record_id):
+    """API endpoint to delete a specific gainers record"""
+    try:
+        collector = NSEGainersCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+        collector.close()
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                "success": False,
+                "error": "Record not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "message": "Record deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # Top 20 Losers Endpoints
 
 def get_losers_next_run_time():
-    """Calculate next scheduled run time for losers (09:15 AM to 03:30 PM, every 3 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 15)  # 09:15 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:15
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=days_until_monday)
-        return next_run
-    
-    # If before market hours, return today at 09:15
-    if current_time < start_time:
-        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0)
-        return next_run
-    
-    # If after market hours, return next day at 09:15
-    if current_time > end_time:
-        next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=1)
-        # If next day is Saturday, skip to Monday
-        if next_run.weekday() >= 5:
-            days_until_monday = 7 - next_run.weekday()
-            next_run += timedelta(days=days_until_monday)
-        return next_run
-    
-    # During market hours, return next 3-minute interval
-    current_minute = now.minute
-    # Round up to next 3-minute interval
-    next_minute = ((current_minute // 3) + 1) * 3
-    if next_minute >= 60:
-        next_hour = now.hour + 1
-        next_minute = 0
-        # Check if next hour is after market close
-        if next_hour > end_time.hour or (next_hour == end_time.hour and next_minute > end_time.minute):
-            # Return next day at 09:15
-            next_run = now.replace(hour=start_time.hour, minute=start_time.minute, second=0, microsecond=0) + timedelta(days=1)
-            if next_run.weekday() >= 5:
-                days_until_monday = 7 - next_run.weekday()
-                next_run += timedelta(days=days_until_monday)
-            return next_run
-        next_run = now.replace(hour=next_hour, minute=next_minute, second=0, microsecond=0)
-    else:
-        next_run = now.replace(minute=next_minute, second=0, microsecond=0)
-    
-    return next_run
+    """Calculate next scheduled run time for losers using config"""
+    return get_interval_scheduler_next_run_time("gainers_losers")
 
 
 def get_losers_status():
@@ -4286,18 +4345,33 @@ def api_losers_status():
 @app.route('/api/losers/data')
 @token_required
 def api_losers_data():
-    """API endpoint to get collected losers data"""
+    """API endpoint to get collected losers data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["timestamp"] = {"$gte": start_date}
+        if end_date:
+            if "timestamp" in query_filter:
+                query_filter["timestamp"]["$lte"] = end_date
+            else:
+                query_filter["timestamp"] = {"$lte": end_date}
+        
         skip = (page - 1) * limit
         
         collector = NSELosersCollector()
         
-        # Get total count
-        total_count = collector.collection.count_documents({})
+        # Get total count with filter
+        total_count = collector.collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("timestamp", -1).skip(skip).limit(limit))
+        records = list(collector.collection.find(query_filter).sort("timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4420,69 +4494,44 @@ def api_losers_trigger():
         }), 500
 
 
+@app.route('/api/losers/data/<record_id>', methods=['DELETE'])
+@token_required
+def api_delete_losers_data(record_id):
+    """API endpoint to delete a specific losers record"""
+    try:
+        collector = NSELosersCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+        collector.close()
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                "success": False,
+                "error": "Record not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "message": "Record deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # News Collector Endpoints
 
 def get_news_collector_next_run_time():
-    """Calculate next scheduled run time for news collector (09:00 AM to 03:30 PM, every 15 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(9, 0)   # 09:00 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 09:00
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 09:00
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 09:00
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (09:00 to 03:30)
-    # Calculate next 15-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 15) + 1) * 15
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:00
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 09:00
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for news collector using config"""
+    return get_interval_scheduler_next_run_time("news")
 
 
 def get_news_collector_status():
@@ -4534,18 +4583,33 @@ def api_news_status():
 @app.route('/api/news/data')
 @token_required
 def api_news_data():
-    """API endpoint to get collected news data"""
+    """API endpoint to get collected news data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["date"] = {"$gte": start_date}
+        if end_date:
+            if "date" in query_filter:
+                query_filter["date"]["$lte"] = end_date
+            else:
+                query_filter["date"] = {"$lte": end_date}
+        
         skip = (page - 1) * limit
         
         collector = NSENewsCollector()
         
-        # Get total count
-        total_count = collector.collection.count_documents({})
+        # Get total count with filter
+        total_count = collector.collection.count_documents(query_filter)
         
         # Get paginated records sorted by pub_date (newest first)
-        records = list(collector.collection.find().sort("pub_date", -1).skip(skip).limit(limit))
+        records = list(collector.collection.find(query_filter).sort("pub_date", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4663,72 +4727,47 @@ def api_news_trigger():
         }), 500
 
 
+@app.route('/api/news/data/<record_id>', methods=['DELETE'])
+@token_required
+def api_delete_news_data(record_id):
+    """API endpoint to delete a specific news record"""
+    try:
+        collector = NSENewsCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+        collector.close()
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                "success": False,
+                "error": "Record not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "message": "Record deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # Twitter collector endpoints removed - not needed
 
 
 # ==================== LiveMint News Collector Endpoints ====================
 
 def get_livemint_news_collector_next_run_time():
-    """Calculate next scheduled run time for LiveMint news collector (07:00 AM to 03:30 PM, every 15 minutes)"""
-    now = datetime.now()
-    current_time = now.time()
-    start_time = dt_time(7, 0)   # 07:00 AM
-    end_time = dt_time(15, 30)   # 03:30 PM
-    
-    # Get current day of week (0 = Monday, 6 = Sunday)
-    current_weekday = now.weekday()
-    
-    # If it's a weekend, return next Monday 07:00
-    if current_weekday >= 5:  # Saturday or Sunday
-        days_until_monday = (7 - current_weekday) % 7
-        if days_until_monday == 0:
-            days_until_monday = 7
-        next_date = now.date() + timedelta(days=days_until_monday)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # If before market opens today, return today 07:00
-    if current_time < start_time:
-        next_run = datetime.combine(now.date(), start_time)
-        return next_run
-    
-    # If after market closes today, return next weekday 07:00
-    if current_time > end_time:
-        days_ahead = 1
-        while (current_weekday + days_ahead) % 7 >= 5:
-            days_ahead += 1
-        next_date = now.date() + timedelta(days=days_ahead)
-        next_run = datetime.combine(next_date, start_time)
-        return next_run
-    
-    # We're within market hours (07:00 to 03:30)
-    # Calculate next 15-minute interval
-    current_minute = now.minute
-    next_minute = ((current_minute // 15) + 1) * 15
-    
-    if next_minute >= 60:
-        # Move to next hour
-        next_time = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 07:00
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
-    else:
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-        if next_time.time() > end_time:
-            # After market close, go to next weekday 07:00
-            days_ahead = 1
-            while (current_weekday + days_ahead) % 7 >= 5:
-                days_ahead += 1
-            next_date = now.date() + timedelta(days=days_ahead)
-            next_run = datetime.combine(next_date, start_time)
-            return next_run
-        return next_time
+    """Calculate next scheduled run time for LiveMint news collector using config"""
+    return get_interval_scheduler_next_run_time("news")
 
 
 def get_livemint_news_collector_status():
@@ -4781,18 +4820,33 @@ def api_livemint_news_status():
 @app.route('/api/livemint-news/data')
 @token_required
 def api_livemint_news_data():
-    """API endpoint to get collected LiveMint news data"""
+    """API endpoint to get collected LiveMint news data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["date"] = {"$gte": start_date}
+        if end_date:
+            if "date" in query_filter:
+                query_filter["date"]["$lte"] = end_date
+            else:
+                query_filter["date"] = {"$lte": end_date}
+        
         skip = (page - 1) * limit
         
         collector = NSELiveMintNewsCollector()
         
-        # Get total count
-        total_count = collector.collection.count_documents({})
+        # Get total count with filter
+        total_count = collector.collection.count_documents(query_filter)
         
         # Get paginated records sorted by pub_date (newest first)
-        records = list(collector.collection.find().sort("pub_date", -1).skip(skip).limit(limit))
+        records = list(collector.collection.find(query_filter).sort("pub_date", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4895,6 +4949,39 @@ def api_livemint_news_trigger():
         return jsonify({
             "success": success,
             "message": "LiveMint news collection completed" if success else "LiveMint news collection failed"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/livemint-news/data/<record_id>', methods=['DELETE'])
+@token_required
+def api_delete_livemint_news_data(record_id):
+    """API endpoint to delete a specific LiveMint news record"""
+    try:
+        collector = NSELiveMintNewsCollector()
+        
+        if not ObjectId.is_valid(record_id):
+            return jsonify({
+                "success": False,
+                "error": "Invalid record ID"
+            }), 400
+        
+        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+        collector.close()
+        
+        if result.deleted_count == 0:
+            return jsonify({
+                "success": False,
+                "error": "Record not found"
+            }), 404
+        
+        return jsonify({
+            "success": True,
+            "message": "Record deleted successfully"
         })
     except Exception as e:
         return jsonify({

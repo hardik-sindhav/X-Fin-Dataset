@@ -10,4 +10,5 @@ textblob==0.17.1
 pytz==2024.1
 PyJWT==2.8.0
 werkzeug==3.0.1
+redis==5.0.1
 
