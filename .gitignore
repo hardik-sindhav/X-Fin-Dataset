@@ -25,6 +25,9 @@ logs/
 *_status.json
 scheduler_status.json
 
+# Scheduler config (local only)
+backend/scheduler_config.json
+
 # Node
 node_modules/
 npm-debug.log*
