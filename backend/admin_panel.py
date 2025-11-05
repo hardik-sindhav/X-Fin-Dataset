@@ -5192,5 +5192,12 @@ if __name__ == '__main__':
     print("=" * 80)
     
     # Run Flask app
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # In production, use a production WSGI server like gunicorn
+    # For development: app.run(debug=True, host='0.0.0.0', port=5000)
+    # For production: Use gunicorn or uWSGI
+    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    host = os.getenv('HOST', '0.0.0.0')
+    port = int(os.getenv('PORT', 5000))
+    
+    app.run(debug=debug_mode, host=host, port=port)
 
