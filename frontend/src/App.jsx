@@ -19,12 +19,14 @@ import {
   Home,
   ChevronLeft,
   ChevronRight,
-  LogOut
+  LogOut,
+  Settings as SettingsIcon
 } from 'lucide-react'
 import HomePage from './components/HomePage'
 import Login from './components/Login'
 import Footer from './components/Footer'
 import Pricing from './components/Pricing'
+import Settings from './components/Settings'
 import './App.css'
 
 const API_BASE = '/api'
@@ -795,7 +797,10 @@ function App() {
   // Handle tab change - fetch data if not loaded
   const handleTabChange = (tabName) => {
     setActiveTab(tabName)
-    fetchTabData(tabName)
+    // Don't fetch data for settings tab
+    if (tabName !== 'settings') {
+      fetchTabData(tabName)
+    }
     // Close sidebar on mobile after selecting a tab
     if (window.innerWidth <= 768) {
       setSidebarOpen(false)
@@ -1393,6 +1398,16 @@ function App() {
             >
               <Home size={20} />
               Home
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => {
+                handleTabChange('settings')
+                setSidebarOpen(false)
+              }}
+            >
+              <SettingsIcon size={20} />
+              Settings
             </li>
           </ul>
         </div>
@@ -4239,6 +4254,8 @@ function App() {
               <Pagination tabName="news" />
             </div>
           </>
+        ) : activeTab === 'settings' ? (
+          <Settings authToken={authToken} />
         ) : activeTab === 'livemint-news' ? (
           <>
             {/* LiveMint News Collector Status Card */}
