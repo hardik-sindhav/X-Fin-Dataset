@@ -29,7 +29,7 @@ import Settings from './components/Settings'
 import DetailView from './components/DetailView'
 import './App.css'
 
-const API_BASE = '/api'
+const API_BASE = 'https://api.xfinai.cloud/api'
 
 function App() {
   // Auth state

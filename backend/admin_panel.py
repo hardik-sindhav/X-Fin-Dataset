@@ -248,6 +248,60 @@ def home():
     return jsonify({"status": "ok", "message": "API is running"})
 
 
+@app.route('/api/mongodb/health', methods=['GET'])
+def api_mongodb_health():
+    """API endpoint to check MongoDB connection status"""
+    try:
+        from pymongo import MongoClient
+        
+        # Get MongoDB configuration from environment variables
+        MONGO_HOST = os.getenv('MONGO_HOST', 'localhost')
+        MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
+        MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'nse_data')
+        MONGO_USERNAME = os.getenv('MONGO_USERNAME', None)
+        MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', None)
+        
+        # Build MongoDB URI
+        if MONGO_USERNAME and MONGO_PASSWORD:
+            mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+        else:
+            mongo_uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
+        
+        # Test connection
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+        client.admin.command('ping')
+        
+        # Get database and check if it exists
+        db = client[MONGO_DB_NAME]
+        
+        # Try to list collections to verify access
+        collections = db.list_collection_names()
+        
+        # Get server info
+        server_info = client.server_info()
+        
+        client.close()
+        
+        return jsonify({
+            "success": True,
+            "connected": True,
+            "host": MONGO_HOST,
+            "port": MONGO_PORT,
+            "database": MONGO_DB_NAME,
+            "server_version": server_info.get('version', 'unknown'),
+            "collections_count": len(collections),
+            "message": "MongoDB connection successful"
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "connected": False,
+            "error": str(e),
+            "message": "MongoDB connection failed"
+        }), 500
+
+
 @app.route('/api/login', methods=['POST'])
 def api_login():
     """API endpoint for user login - returns JWT token"""
