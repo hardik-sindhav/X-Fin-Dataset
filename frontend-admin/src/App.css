@@ -61,7 +61,7 @@
 }
 
 .footer-brand-title {
-  font-size: 1.75rem;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--black);
   letter-spacing: -0.02em;
@@ -275,7 +275,7 @@
   }
 
   .footer-brand-title {
-    font-size: 1.5rem;
+    font-size: 0.95rem;
   }
 
   .footer-brand-description {
@@ -326,7 +326,7 @@
 }
 
 .pricing-title {
-  font-size: 3rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--black);
   margin: 0 0 var(--spacing-md) 0;
@@ -334,7 +334,7 @@
 }
 
 .pricing-subtitle {
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   color: var(--gray-600);
   max-width: 800px;
   margin: 0 auto;
@@ -346,7 +346,7 @@
 }
 
 .data-types-title {
-  font-size: 1.75rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--black);
   text-align: center;
@@ -389,7 +389,7 @@
 }
 
 .data-type-name {
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--black);
   margin: 0 0 var(--spacing-sm) 0;
@@ -550,7 +550,7 @@
 }
 
 .plan-name {
-  font-size: 1.75rem;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--black);
   margin: 0 0 var(--spacing-sm) 0;
@@ -613,11 +613,11 @@
 .currency {
   color: var(--black);
   font-weight: 700;
-  font-size: 1.5rem;
+  font-size: 0.95rem;
 }
 
 .price {
-  font-size: 3rem;
+  font-size: 0.95rem;
   font-weight: 900;
   color: var(--black);
   line-height: 1;
@@ -981,7 +981,7 @@
 }
 
 .info-card h3 {
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--black);
   margin: 0 0 var(--spacing-sm) 0;
@@ -1004,7 +1004,7 @@
 }
 
 .contact-title {
-  font-size: 2rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--black);
   margin: 0 0 var(--spacing-md) 0;
@@ -1012,7 +1012,7 @@
 }
 
 .contact-description {
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   color: var(--gray-600);
   margin: 0 0 var(--spacing-xl) 0;
   max-width: 600px;
@@ -1057,7 +1057,7 @@
   }
 
   .pricing-title {
-    font-size: 2rem;
+    font-size: 0.95rem;
   }
 
   .pricing-subtitle {
@@ -1073,11 +1073,11 @@
   }
 
   .price {
-    font-size: 2.5rem;
+    font-size: 1rem;
   }
 
   .contact-title {
-    font-size: 1.5rem;
+    font-size: 0.95rem;
   }
 }
 
@@ -1087,7 +1087,7 @@
   }
 
   .pricing-title {
-    font-size: 1.75rem;
+    font-size: 1rem;
   }
 
   .pricing-card {
@@ -1095,11 +1095,11 @@
   }
 
   .plan-name {
-    font-size: 1.5rem;
+    font-size: 0.95rem;
   }
 
   .price {
-    font-size: 2rem;
+    font-size: 0.95rem;
   }
 }
 
@@ -1185,7 +1185,7 @@
 }
 
 .header h1 {
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--black);
   letter-spacing: -0.02em;
@@ -1298,7 +1298,7 @@
 }
 
 .sidebar-header h2 {
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--black);
   margin: 0;
@@ -1481,7 +1481,7 @@
 }
 
 .card-header h2 {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--black);
   letter-spacing: -0.01em;
@@ -1669,7 +1669,7 @@
 }
 
 .status-value {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--black);
   letter-spacing: -0.02em;
@@ -1774,7 +1774,7 @@
 }
 
 .stat-value {
-  font-size: 1.75rem;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--black);
   letter-spacing: -0.02em;
@@ -1802,7 +1802,7 @@
 
 .stat-item-sentiment .stat-value {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 0.95rem;
 }
 
 .stat-item-sentiment.positive .stat-label {
@@ -2012,7 +2012,7 @@
 }
 
 .hero-title {
-  font-size: 2.5rem;
+  font-size: 1rem;
   font-weight: 900;
   color: var(--black);
   letter-spacing: -0.04em;
@@ -2097,7 +2097,7 @@
 }
 
 .hero-stat-value {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--black);
   margin: 0;
@@ -2906,7 +2906,7 @@
 }
 
 .countdown-value-compact {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 900;
   color: var(--black);
   line-height: 1;
@@ -2923,7 +2923,7 @@
 }
 
 .countdown-separator-compact {
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 900;
   color: var(--gray-400);
   line-height: 1;
@@ -2940,7 +2940,7 @@
 }
 
 .launch-description p {
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   color: var(--gray-600);
   line-height: 1.8;
   margin: 0;
@@ -3350,7 +3350,7 @@
 }
 
 .access-title-modern {
-  font-size: 2rem;
+  font-size: 0.95rem;
   font-weight: 900;
   color: var(--black);
   letter-spacing: -0.03em;
@@ -3400,7 +3400,7 @@
 }
 
 .card-title-modern {
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--black);
   margin: 0 0 var(--spacing-lg);
@@ -3435,7 +3435,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 900;
   flex-shrink: 0;
   transition: all 0.3s;
@@ -3601,7 +3601,7 @@
 }
 
 .bid-title-premium {
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--gray-700);
   margin: 0 0 var(--spacing-xs);
@@ -3674,7 +3674,7 @@
 }
 
 .timer-number {
-  font-size: 2rem;
+  font-size: 0.95rem;
   font-weight: 900;
   color: var(--white);
   line-height: 1;
@@ -3693,7 +3693,7 @@
 }
 
 .timer-separator-premium {
-  font-size: 2rem;
+  font-size: 0.95rem;
   font-weight: 900;
   color: var(--black);
   line-height: 1;
@@ -3713,7 +3713,7 @@
   border: 3px solid var(--green);
   padding: var(--spacing-lg) var(--spacing-xl);
   border-radius: var(--radius-md);
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   font-weight: 800;
   cursor: not-allowed;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -3757,7 +3757,7 @@
 }
 
 .btn-text-premium {
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   font-weight: 800;
   letter-spacing: 0.02em;
 }
@@ -3839,7 +3839,7 @@
 }
 
 .stat-value-modern {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 900;
   color: var(--black);
   line-height: 1;
@@ -3865,7 +3865,7 @@
 }
 
 .final-cta-modern h3 {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 900;
   color: var(--black);
   margin: 0 0 var(--spacing-sm);
@@ -3888,7 +3888,7 @@
   border: 2px solid var(--black);
   padding: var(--spacing-md) var(--spacing-xl);
   border-radius: var(--radius-md);
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.3s;
@@ -3920,7 +3920,7 @@
 }
 
 .section-title {
-  font-size: 1.75rem;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--black);
   letter-spacing: -0.02em;
@@ -4105,7 +4105,7 @@
 }
 
 .benefit-title {
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--black);
   margin: 0 0 var(--spacing-sm);
@@ -4154,7 +4154,7 @@
 }
 
 .highlight-number {
-  font-size: 3rem;
+  font-size: 0.95rem;
   font-weight: 900;
   color: var(--green);
   line-height: 1;
@@ -4163,7 +4163,7 @@
 }
 
 .highlight-content h3 {
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--black);
   margin: 0 0 var(--spacing-xs);
@@ -4259,7 +4259,7 @@
 }
 
 .intro-title {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--black);
   margin: 0;
@@ -4284,7 +4284,7 @@
 }
 
 .values-title {
-  font-size: 2rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--black);
   margin: 0;
@@ -4348,7 +4348,7 @@
 }
 
 .value-card-header h4 {
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 800;
   color: var(--black);
   margin: 0;
@@ -4432,7 +4432,7 @@
 }
 
 .about-stat-number {
-  font-size: 2.25rem;
+  font-size: 0.95rem;
   font-weight: 900;
   color: var(--green);
   margin: 0;
@@ -4487,7 +4487,7 @@
 }
 
 .contact-info-title {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: var(--black);
   margin: 0;
@@ -4668,7 +4668,7 @@
 }
 
 .cta-title {
-  font-size: 1.75rem;
+  font-size: 1rem;
   font-weight: 900;
   color: var(--white);
   margin: 0 0 var(--spacing-md);
@@ -4729,17 +4729,17 @@
   }
 
   .hero-title {
-    font-size: 2rem;
+    font-size: 0.95rem;
   }
 }
 
 @media (max-width: 768px) {
   .hero-title {
-    font-size: 1.75rem;
+    font-size: 1rem;
   }
 
   .section-title {
-    font-size: 1.5rem;
+    font-size: 0.95rem;
   }
 
   .features-grid,
@@ -4760,7 +4760,7 @@
   }
 
   .cta-title {
-    font-size: 1.5rem;
+    font-size: 0.95rem;
   }
 
   .hero-stats {
@@ -4769,11 +4769,11 @@
   }
 
   .hero-title {
-    font-size: 2.5rem;
+    font-size: 1rem;
   }
 
   .hero-description {
-    font-size: 1.125rem;
+    font-size: 0.95rem;
   }
 
   .hero-actions {
@@ -4794,7 +4794,7 @@
   }
 
   .launch-title-modern {
-    font-size: 1.5rem;
+    font-size: 0.95rem;
     flex-direction: column;
   }
 
@@ -4822,7 +4822,7 @@
   }
 
   .countdown-value-compact {
-    font-size: 1.25rem;
+    font-size: 1rem;
   }
 
   .countdown-separator-compact {
@@ -4855,7 +4855,7 @@
   }
 
   .access-title-modern {
-    font-size: 1.5rem;
+    font-size: 0.95rem;
   }
 
   .stats-modern {
@@ -4895,11 +4895,11 @@
   }
 
   .timer-number {
-    font-size: 2rem;
+    font-size: 0.95rem;
   }
 
   .timer-separator-premium {
-    font-size: 1.5rem;
+    font-size: 0.95rem;
     margin-bottom: var(--spacing-md);
   }
 
@@ -4914,7 +4914,7 @@
   }
 
   .final-cta-modern h3 {
-    font-size: 1.25rem;
+    font-size: 1rem;
   }
 
   .about-intro {
@@ -5038,7 +5038,7 @@
   }
   
   .header h1 {
-    font-size: 1.5rem;
+    font-size: 0.95rem;
   }
   
   .sidebar {
@@ -5372,7 +5372,7 @@
 }
 
 .login-title-simple {
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--gray-700);
   margin: 0 0 var(--spacing-md);
@@ -5638,7 +5638,7 @@
 }
 
 .dialog-title {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--black);
   text-align: center;
@@ -5714,7 +5714,7 @@
   }
 
   .dialog-title {
-    font-size: 1.25rem;
+    font-size: 1rem;
     padding: 0 24px;
   }
 
@@ -5781,7 +5781,7 @@
 }
 
 .settings-header h1 {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--black);
   margin: 0 0 var(--spacing-xs) 0;
@@ -5946,7 +5946,7 @@
 }
 
 .settings-card h2 {
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--black);
   margin: 0;
@@ -6177,7 +6177,7 @@
 }
 
 .holidays-header h2 {
-  font-size: 1.25rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--black);
   margin: 0 0 var(--spacing-xs) 0;
@@ -6405,7 +6405,7 @@
   }
 
   .settings-header h1 {
-    font-size: 1.75rem;
+    font-size: 1rem;
   }
 
   .settings-form {
@@ -6508,7 +6508,7 @@
 }
 
 .detail-view-header h2 {
-  font-size: 1.5rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--black);
   margin: 0;

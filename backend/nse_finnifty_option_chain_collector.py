@@ -64,7 +64,10 @@ class NSEFinniftyOptionChainCollector:
                 # URL-encode username and password to handle special characters like @, :, etc.
                 encoded_username = quote_plus(MONGO_USERNAME)
                 encoded_password = quote_plus(MONGO_PASSWORD)
-                mongo_uri = f"mongodb://{encoded_username}:{encoded_password}@{MONGO_HOST}:{MONGO_PORT}/"
+                # Get auth source (default to 'admin' for MongoDB) - REQUIRED for authentication
+                MONGO_AUTH_SOURCE = os.getenv('MONGO_AUTH_SOURCE', 'admin')
+                # Build connection string with authSource parameter (required for MongoDB auth)
+                mongo_uri = f"mongodb://{encoded_username}:{encoded_password}@{MONGO_HOST}:{MONGO_PORT}/{MONGO_DB_NAME}?authSource={MONGO_AUTH_SOURCE}"
             else:
                 mongo_uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
             
