@@ -44,6 +44,7 @@ import sys
 import jwt
 from functools import wraps
 from werkzeug.security import check_password_hash, generate_password_hash
+from urllib.parse import quote_plus
 
 app = Flask(__name__)
 
@@ -281,9 +282,12 @@ def api_mongodb_health():
         MONGO_USERNAME = os.getenv('MONGO_USERNAME', None)
         MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', None)
         
-        # Build MongoDB URI
+        # Build MongoDB URI with URL-encoded credentials to handle special characters
         if MONGO_USERNAME and MONGO_PASSWORD:
-            mongo_uri = f"mongodb://{MONGO_USERNAME}:{MONGO_PASSWORD}@{MONGO_HOST}:{MONGO_PORT}/"
+            # URL-encode username and password to handle special characters like @, :, etc.
+            encoded_username = quote_plus(MONGO_USERNAME)
+            encoded_password = quote_plus(MONGO_PASSWORD)
+            mongo_uri = f"mongodb://{encoded_username}:{encoded_password}@{MONGO_HOST}:{MONGO_PORT}/"
         else:
             mongo_uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
         
@@ -6101,17 +6105,21 @@ def start_all_schedulers_in_background():
         """Run scheduler in a separate thread"""
         def scheduler_worker():
             try:
+                logger.info(f"Starting {scheduler_name}...")
                 # Import the scheduler module
                 scheduler_module = __import__(module_name, fromlist=[])
                 
                 # Check if module has a main function (most schedulers have this)
                 if hasattr(scheduler_module, 'main'):
+                    logger.info(f"{scheduler_name} imported successfully, calling main()...")
                     scheduler_module.main()
                 else:
                     logger.error(f"{scheduler_name} does not have a main() function")
                 
             except ImportError as e:
                 logger.error(f"Failed to import {module_name}: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
             except Exception as e:
                 logger.error(f"Error in {scheduler_name} thread: {str(e)}")
                 import traceback
@@ -6119,6 +6127,7 @@ def start_all_schedulers_in_background():
         
         thread = threading.Thread(target=scheduler_worker, daemon=True, name=scheduler_name)
         thread.start()
+        logger.info(f"Thread started for {scheduler_name} (daemon thread)")
         return thread
     
     threads = []
