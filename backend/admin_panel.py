@@ -6105,17 +6105,21 @@ def start_all_schedulers_in_background():
         """Run scheduler in a separate thread"""
         def scheduler_worker():
             try:
+                logger.info(f"Starting {scheduler_name}...")
                 # Import the scheduler module
                 scheduler_module = __import__(module_name, fromlist=[])
                 
                 # Check if module has a main function (most schedulers have this)
                 if hasattr(scheduler_module, 'main'):
+                    logger.info(f"{scheduler_name} imported successfully, calling main()...")
                     scheduler_module.main()
                 else:
                     logger.error(f"{scheduler_name} does not have a main() function")
                 
             except ImportError as e:
                 logger.error(f"Failed to import {module_name}: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
             except Exception as e:
                 logger.error(f"Error in {scheduler_name} thread: {str(e)}")
                 import traceback
@@ -6123,6 +6127,7 @@ def start_all_schedulers_in_background():
         
         thread = threading.Thread(target=scheduler_worker, daemon=True, name=scheduler_name)
         thread.start()
+        logger.info(f"Thread started for {scheduler_name} (daemon thread)")
         return thread
     
     threads = []
