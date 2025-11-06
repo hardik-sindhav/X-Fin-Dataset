@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { AlertCircle, Activity } from 'lucide-react'
 import '../App.css'
-
-const API_BASE = 'https://api.xfinai.cloud/api'
+import { API_BASE } from '../config'
 
 function Login({ onLoginSuccess }) {
   const [username, setUsername] = useState('')

@@ -74,10 +74,19 @@ JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-producti
 JWT_ALGORITHM = 'HS256'
 JWT_EXPIRATION_HOURS = 24
 
-# Default admin credentials (should be changed and stored securely in production)
-# For production, use environment variables
+# Admin credentials loaded from environment variables
+# Option 1: Set plain password in .env (recommended for simplicity)
+# Option 2: Set password hash in .env (more secure, but requires generating hash)
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
-ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH', generate_password_hash('admin123'))
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', None)  # Plain password from .env
+ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH', None)  # Pre-hashed password from .env
+
+# If neither password nor hash is set, use default (for development only)
+if not ADMIN_PASSWORD and not ADMIN_PASSWORD_HASH:
+    ADMIN_PASSWORD_HASH = generate_password_hash('admin123')  # Default: admin123
+elif ADMIN_PASSWORD:
+    # If plain password is provided, hash it
+    ADMIN_PASSWORD_HASH = generate_password_hash(ADMIN_PASSWORD)
 
 STATUS_FILE = 'scheduler_status.json'
 OPTION_CHAIN_STATUS_FILE = 'option_chain_scheduler_status.json'

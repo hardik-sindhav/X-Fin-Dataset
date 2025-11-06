@@ -11,7 +11,7 @@ import {
   CheckCircle
 } from 'lucide-react'
 
-const API_BASE = 'https://api.xfinai.cloud/api'
+import { API_BASE } from '../config'
 
 const Settings = ({ authToken }) => {
   const [activeTab, setActiveTab] = useState('banks')

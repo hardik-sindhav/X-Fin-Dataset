@@ -57,6 +57,7 @@ body {
   background: var(--white-off);
   color: var(--black);
   line-height: 1.6;
+  font-size: 14px; /* Base font size reduced from default 16px */
 }
 
 code {

@@ -31,7 +31,7 @@ import {
 } from 'lucide-react'
 import '../App.css'
 
-const API_BASE = 'https://api.xfinai.cloud/api'
+import { API_BASE } from '../config'
 
 function HomePage({ onNavigate }) {
   const [overviewStats, setOverviewStats] = useState({
