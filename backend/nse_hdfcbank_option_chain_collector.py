@@ -15,6 +15,7 @@ import os
 from dotenv import load_dotenv
 from redis_expiry_cache import get_expiry_cache
 from urllib.parse import quote_plus
+from timezone_utils import now_for_mongo
 
 # Load environment variables
 load_dotenv()
@@ -258,10 +259,10 @@ class NSEHDFCBankOptionChainCollector:
                 {
                     "$set": {
                         **data,
-                        "updatedAt": datetime.utcnow()
+                        "updatedAt": now_for_mongo()
                     },
                     "$setOnInsert": {
-                        "insertedAt": datetime.utcnow()
+                        "insertedAt": now_for_mongo()
                     }
                 },
                 upsert=True

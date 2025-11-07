@@ -8,7 +8,7 @@ import time
 import threading
 import logging
 from nse_icicibank_option_chain_collector import NSEICICIBankOptionChainCollector
-from datetime import datetime, time as dt_time, timedelta, date
+from datetime import datetime, time as dt_time, timedelta, date, timezone
 from scheduler_config import get_config_for_scheduler, is_holiday
 import json
 import os
@@ -85,11 +85,11 @@ def run_collector():
     
     # Check if already running (non-blocking check)
     if not execution_lock.acquire(blocking=False):
-        logger.warning("Collector is already running, skipping this execution")
+        logger.debug("Collector is already running, skipping this execution")
         return
     
     # Check minimum interval
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     config = get_scheduler_config()
     interval_minutes = config.get("interval_minutes", 3)
     min_interval_seconds = interval_minutes * 60 - 10  # Allow 10 seconds buffer
@@ -138,7 +138,7 @@ def run_collector():
         logger.error(f"ICICI Bank Option Chain Cronjob failed with error: {str(e)}")
         # Update status file with error
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "error"
         }
         try:

@@ -7,7 +7,7 @@ import schedule
 import time
 import logging
 from nse_fiidii_collector import NSEDataCollector
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from scheduler_config import get_config_for_scheduler, is_holiday
 import json
 import os
@@ -41,7 +41,7 @@ STATUS_FILE = 'scheduler_status.json'
 def run_collector():
     """Execute the NSE data collector"""
     # Check if it's a holiday
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     if is_holiday(now.date()):
         logger.info(f"Skipping FII/DII collection - holiday: {now.strftime('%Y-%m-%d')}")
         return
@@ -67,7 +67,7 @@ def run_collector():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed"
         }
         with open(STATUS_FILE, 'w') as f:
@@ -77,7 +77,7 @@ def run_collector():
         logger.error(f"Cronjob failed with error: {str(e)}")
         # Update status file with error
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "error"
         }
         try:
