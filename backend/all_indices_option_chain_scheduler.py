@@ -1,33 +1,27 @@
 """
-Cronjob Scheduler for NSE CANBK Option Chain Data Collector
+Cronjob Scheduler for NSE All Indices Option Chain Data Collector
 Runs Monday to Friday from 09:15 AM to 03:30 PM, every 3 minutes
+Collects data for all 4 indices in a single run
 """
 
 import schedule
 import time
 import threading
-import logging
-from nse_canbk_option_chain_collector import NSECANBKOptionChainCollector
+from nse_all_indices_option_chain_collector import NSEAllIndicesOptionChainCollector, INDICES
 from datetime import datetime, time as dt_time, timedelta, date, timezone
 from scheduler_config import get_config_for_scheduler, is_holiday
+from timezone_utils import get_ist_now, now_for_mongo
+from logger_config import get_logger
 import json
 import os
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('canbk_option_chain_scheduler.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# Get logger
+logger = get_logger(__name__)
 
 # Load configuration
 def get_scheduler_config():
     """Get scheduler configuration from config file"""
-    config = get_config_for_scheduler("banks")
+    config = get_config_for_scheduler("indices")
     if config:
         return config
     # Fallback to defaults
@@ -38,7 +32,7 @@ def get_scheduler_config():
         "enabled": True
     }
 
-STATUS_FILE = 'canbk_option_chain_scheduler_status.json'
+STATUS_FILE = 'all_indices_option_chain_scheduler_status.json'
 
 # Execution lock to prevent concurrent runs
 execution_lock = threading.Lock()
@@ -80,7 +74,7 @@ def is_market_hours(now: datetime) -> bool:
 
 
 def run_collector():
-    """Execute the collector"""
+    """Execute the collector for all indices"""
     global last_run_time
     
     # Check if already running (non-blocking check)
@@ -89,7 +83,7 @@ def run_collector():
         return
     
     # Check minimum interval
-    now = datetime.now(timezone.utc)
+    now_ist = get_ist_now()
     config = get_scheduler_config()
     interval_minutes = config.get("interval_minutes", 3)
     min_interval_seconds = interval_minutes * 60 - 10  # Allow 10 seconds buffer
@@ -98,52 +92,73 @@ def run_collector():
     lock_acquired = True
     try:
         if last_run_time:
-            time_since_last_run = (now - last_run_time).total_seconds()
+            time_since_last_run = (now_ist - last_run_time).total_seconds()
             if time_since_last_run < min_interval_seconds:
-                logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
+                logger.debug(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
+                lock_acquired = False
                 return
         
         # Check if it's market hours before running
-        if not is_market_hours(now):
-            logger.info(f"Outside market hours. Current time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        if not is_market_hours(now_ist):
+            logger.debug(f"Outside market hours. Current time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
+            lock_acquired = False
             return
         
-        logger.info("=" * 60)
-        logger.info(f"CANBK Option Chain Cronjob triggered at {now}")
+        logger.debug("=" * 60)
+        logger.debug(f"All Indices Option Chain Cronjob triggered at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
+        logger.debug(f"Collecting data for {len(INDICES)} indices")
+        logger.debug("=" * 60)
         
-        logger.info("=" * 60)
+        last_run_time = now_ist
+        collector = NSEAllIndicesOptionChainCollector()
+        results = collector.collect_and_save_all_indices()
         
-        last_run_time = now
+        # Count successes and failures
+        successful = sum(1 for success in results.values() if success)
+        failed = len(results) - successful
         
-        collector = NSECANBKOptionChainCollector()
-        success = collector.collect_and_save()
-        
-        if success:
-            logger.info("CANBK Option Chain Cronjob completed successfully")
+        if successful == len(INDICES):
+            logger.debug(f"All Indices Option Chain Cronjob completed successfully - All {len(INDICES)} indices collected")
+            overall_status = "success"
+        elif successful > 0:
+            logger.warning(f"All Indices Option Chain Cronjob completed with partial success - {successful}/{len(INDICES)} indices successful")
+            overall_status = "partial"
         else:
-            logger.error("CANBK Option Chain Cronjob completed with errors")
+            logger.error(f"All Indices Option Chain Cronjob completed with errors - All {len(INDICES)} indices failed")
+            overall_status = "failed"
+        
+        # Log individual index results only if there are failures
+        if failed > 0:
+            for symbol, success in results.items():
+                if not success:
+                    logger.warning(f"  ✗ {symbol}: Failed")
         
         # Update status file
         status_data = {
-            "last_run": now.isoformat(),
-            "last_status": "success" if success else "failed"
+            "last_run": now_for_mongo().isoformat(),
+            "last_status": overall_status,
+            "successful": successful,
+            "failed": failed,
+            "total": len(INDICES),
+            "results": results
         }
         try:
             with open(STATUS_FILE, 'w') as f:
-                json.dump(status_data, f)
+                json.dump(status_data, f, indent=2)
         except Exception as e:
             logger.warning(f"Failed to update status file: {str(e)}")
             
     except Exception as e:
-        logger.error(f"CANBK Option Chain Cronjob failed with error: {str(e)}")
+        logger.error(f"All Indices Option Chain Cronjob failed with error: {str(e)}", exc_info=True)
         # Update status file with error
         status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
-            "last_status": "error"
+            "last_run": now_for_mongo().isoformat(),
+            "last_status": "error",
+            "error": str(e)
         }
         try:
             with open(STATUS_FILE, 'w') as f:
-                json.dump(status_data, f)
+                json.dump(status_data, f, indent=2)
         except:
             pass
     finally:
@@ -151,7 +166,7 @@ def run_collector():
             collector.close()
         if lock_acquired:
             execution_lock.release()
-        logger.info("=" * 60)
+        logger.debug("=" * 60)
 
 
 def main():
@@ -162,9 +177,10 @@ def main():
     end_time = config.get("end_time", "15:30")
     enabled = config.get("enabled", True)
     
-    logger.info("Starting scheduler")
-    logger.info(f"Schedule: Monday to Friday from {start_time} to {end_time}, every {interval} minutes")
-    logger.info(f"Enabled: {enabled}")
+    logger.info("Starting NSE All Indices Option Chain Data Collector Scheduler")
+    logger.debug(f"Indices: {', '.join([i['symbol'] for i in INDICES])}")
+    logger.debug(f"Schedule: Monday to Friday from {start_time} to {end_time}, every {interval} minutes")
+    logger.debug(f"Enabled: {enabled}")
     
     if not enabled:
         logger.warning("Scheduler is disabled in configuration")
@@ -174,7 +190,13 @@ def main():
     # We'll check market hours and holidays inside the run_collector function
     schedule.every(interval).minutes.do(run_collector)
     
-    logger.info("Scheduler configured. Waiting for scheduled times...")
+    logger.debug("Scheduler configured. Waiting for scheduled times...")
+    
+    # Run immediately if within market hours (for testing and immediate execution)
+    now_ist = get_ist_now()
+    if is_market_hours(now_ist):
+        logger.debug(f"Market is open. Running collector immediately at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
+        run_collector()
     
     # Keep the script running
     try:
@@ -185,7 +207,7 @@ def main():
     except KeyboardInterrupt:
         logger.info("Scheduler stopped by user")
     except Exception as e:
-        logger.error(f"Scheduler error: {str(e)}")
+        logger.error(f"Scheduler error: {str(e)}", exc_info=True)
 
 
 if __name__ == "__main__":

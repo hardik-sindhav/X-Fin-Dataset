@@ -9,6 +9,7 @@ import logging
 from nse_fiidii_collector import NSEDataCollector
 from datetime import datetime, date, timezone
 from scheduler_config import get_config_for_scheduler, is_holiday
+from timezone_utils import get_ist_now, now_for_mongo
 import json
 import os
 
@@ -41,13 +42,13 @@ STATUS_FILE = 'scheduler_status.json'
 def run_collector():
     """Execute the NSE data collector"""
     # Check if it's a holiday
-    now = datetime.now(timezone.utc)
-    if is_holiday(now.date()):
-        logger.info(f"Skipping FII/DII collection - holiday: {now.strftime('%Y-%m-%d')}")
+    now_ist = get_ist_now()
+    if is_holiday(now_ist.date()):
+        logger.info(f"Skipping FII/DII collection - holiday: {now_ist.strftime('%Y-%m-%d')}")
         return
     
     # Check if weekday (Monday=0 to Friday=4)
-    if now.weekday() >= 5:  # Saturday or Sunday
+    if now_ist.weekday() >= 5:  # Saturday or Sunday
         return
     
     # Check if enabled
@@ -57,7 +58,7 @@ def run_collector():
     
     collector = None
     try:
-        logger.info(f"FII/DII Cronjob triggered at {now}")
+        logger.info(f"FII/DII Cronjob triggered at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
         
         collector = NSEDataCollector()
         success = collector.collect_and_save()
@@ -67,7 +68,7 @@ def run_collector():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
+            "last_run": now_for_mongo().isoformat(),
             "last_status": "success" if success else "failed"
         }
         with open(STATUS_FILE, 'w') as f:
@@ -77,7 +78,7 @@ def run_collector():
         logger.error(f"Cronjob failed with error: {str(e)}")
         # Update status file with error
         status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
+            "last_run": now_for_mongo().isoformat(),
             "last_status": "error"
         }
         try:

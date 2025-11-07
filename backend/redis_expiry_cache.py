@@ -53,11 +53,13 @@ class RedisExpiryCache:
             self.client.ping()
             logger.info(f"Successfully connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
         except redis.ConnectionError as e:
-            logger.error(f"Failed to connect to Redis: {str(e)}")
-            logger.warning("Redis connection failed. Expiry dates will be fetched from API each time.")
+            # Redis is optional - log as debug to reduce noise
+            logger.debug(f"Redis not available at {REDIS_HOST}:{REDIS_PORT}: {str(e)}")
+            logger.info("Redis connection unavailable. Expiry dates will be fetched from API each time.")
             self.client = None
         except Exception as e:
-            logger.error(f"Unexpected error connecting to Redis: {str(e)}")
+            # Only log unexpected errors as warnings
+            logger.warning(f"Unexpected error connecting to Redis: {str(e)}")
             self.client = None
     
     def _get_today_key(self, symbol: str) -> str:
@@ -101,10 +103,10 @@ class RedisExpiryCache:
             return None
             
         except redis.RedisError as e:
-            logger.error(f"Redis error getting expiry for {symbol}: {str(e)}")
+            logger.debug(f"Redis error getting expiry for {symbol}: {str(e)}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error getting expiry for {symbol}: {str(e)}")
+            logger.debug(f"Unexpected error getting expiry for {symbol}: {str(e)}")
             return None
     
     def set_expiry(self, symbol: str, expiry: str, ttl_seconds: int = None) -> bool:
@@ -142,10 +144,10 @@ class RedisExpiryCache:
             return True
             
         except redis.RedisError as e:
-            logger.error(f"Redis error setting expiry for {symbol}: {str(e)}")
+            logger.debug(f"Redis error setting expiry for {symbol}: {str(e)}")
             return False
         except Exception as e:
-            logger.error(f"Unexpected error setting expiry for {symbol}: {str(e)}")
+            logger.debug(f"Unexpected error setting expiry for {symbol}: {str(e)}")
             return False
     
     def clear_expiry(self, symbol: str) -> bool:
@@ -169,10 +171,10 @@ class RedisExpiryCache:
             return True
             
         except redis.RedisError as e:
-            logger.error(f"Redis error clearing expiry for {symbol}: {str(e)}")
+            logger.debug(f"Redis error clearing expiry for {symbol}: {str(e)}")
             return False
         except Exception as e:
-            logger.error(f"Unexpected error clearing expiry for {symbol}: {str(e)}")
+            logger.debug(f"Unexpected error clearing expiry for {symbol}: {str(e)}")
             return False
     
     def is_available(self) -> bool:
