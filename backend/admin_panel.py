@@ -36,7 +36,7 @@ from nse_livemint_news_collector import NSELiveMintNewsCollector
 import schedule
 import json
 import os
-from datetime import datetime, timedelta, time as dt_time
+from datetime import datetime, timedelta, time as dt_time, timezone
 import threading
 import time as time_module
 import psutil
@@ -554,7 +554,7 @@ def api_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -882,7 +882,7 @@ def api_option_chain_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -1159,7 +1159,7 @@ def api_banknifty_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -1450,7 +1450,7 @@ def api_finnifty_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -1732,7 +1732,7 @@ def api_midcpnifty_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -1993,7 +1993,7 @@ def api_hdfcbank_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -2254,7 +2254,7 @@ def api_icicibank_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -2515,7 +2515,7 @@ def api_sbin_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -2776,7 +2776,7 @@ def api_kotakbank_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -3037,7 +3037,7 @@ def api_axisbank_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -3298,7 +3298,7 @@ def api_bankbaroda_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -3559,7 +3559,7 @@ def api_pnb_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -3820,7 +3820,7 @@ def api_canbk_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -4081,7 +4081,7 @@ def api_aubank_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -4342,7 +4342,7 @@ def api_indusindbk_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -4603,7 +4603,7 @@ def api_idfcfirstb_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -4864,7 +4864,7 @@ def api_federalbnk_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -5126,7 +5126,7 @@ def api_gainers_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -5364,7 +5364,7 @@ def api_losers_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -5597,7 +5597,7 @@ def api_news_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -5827,7 +5827,7 @@ def api_livemint_news_trigger():
         
         # Update status file
         status_data = {
-            "last_run": datetime.now().isoformat(),
+            "last_run": datetime.now(timezone.utc).isoformat(),
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
@@ -6166,7 +6166,20 @@ if __name__ == '__main__':
     
     print(f"✓ All {len(scheduler_threads)} schedulers started in background")
     print("=" * 80)
-    print("Access the panel at: http://localhost:5000")
+    
+    # Get host and port for display
+    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    host = os.getenv('HOST', '0.0.0.0')
+    port = int(os.getenv('PORT', 5000))
+    
+    # Display access URL based on host
+    if host == '0.0.0.0':
+        # Running on all interfaces - show both localhost and note about external access
+        print(f"Access the panel at: http://localhost:{port} (local)")
+        print(f"Server listening on: {host}:{port} (all interfaces)")
+    else:
+        print(f"Access the panel at: http://{host}:{port}")
+    
     print("=" * 80)
     print("Press Ctrl+C to stop both admin panel and schedulers")
     print("=" * 80)
@@ -6175,9 +6188,5 @@ if __name__ == '__main__':
     # In production, use a production WSGI server like gunicorn
     # For development: app.run(debug=True, host='0.0.0.0', port=5000)
     # For production: Use gunicorn or uWSGI
-    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    host = os.getenv('HOST', '0.0.0.0')
-    port = int(os.getenv('PORT', 5000))
-    
     app.run(debug=debug_mode, host=host, port=port)
 

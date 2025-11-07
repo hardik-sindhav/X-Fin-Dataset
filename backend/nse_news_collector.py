@@ -15,6 +15,7 @@ from typing import List, Dict, Optional
 import os
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
+from timezone_utils import now_for_mongo
 
 # Load environment variables
 load_dotenv()
@@ -195,7 +196,7 @@ class NSENewsCollector:
                             "sentiment": sentiment,
                             "link": link,
                             "pub_date": pub_date_ist,
-                            "insertedAt": datetime.utcnow()
+                            "insertedAt": now_for_mongo()
                         }
                         
                         news_items.append(news_item)
@@ -239,10 +240,10 @@ class NSENewsCollector:
                     {
                         "$set": {
                             **item_copy,
-                            "updatedAt": datetime.utcnow()
+                            "updatedAt": now_for_mongo()
                         },
                         "$setOnInsert": {
-                            "insertedAt": item.get("insertedAt", datetime.utcnow())
+                            "insertedAt": item.get("insertedAt", now_for_mongo())
                         }
                     },
                     upsert=True

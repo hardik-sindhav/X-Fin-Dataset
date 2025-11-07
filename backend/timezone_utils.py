@@ -60,8 +60,8 @@ def get_utc_now_naive() -> datetime:
 def now_for_mongo() -> datetime:
     """
     Get current datetime for MongoDB storage
-    Uses IST time but stores as naive datetime
-    For consistency, we'll store IST time in MongoDB
+    Uses IST time (Asia/Kolkata) to match local timezone
+    Returns naive datetime in IST (stored as-is in MongoDB)
     """
     return get_ist_now_naive()
 
