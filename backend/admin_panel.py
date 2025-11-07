@@ -15,8 +15,7 @@ from scheduler_config import (
     get_holidays, add_holiday, remove_holiday, is_holiday
 )
 from nse_all_banks_option_chain_collector import NSEAllBanksOptionChainCollector, BANKS
-from nse_gainers_collector import NSEGainersCollector
-from nse_losers_collector import NSELosersCollector
+from nse_all_gainers_losers_collector import NSEAllGainersLosersCollector, GAINERS_LOSERS
 from nse_news_collector import NSENewsCollector
 from nse_livemint_news_collector import NSELiveMintNewsCollector
 
@@ -217,8 +216,7 @@ if ADMIN_PASSWORD:
 STATUS_FILE = 'scheduler_status.json'
 ALL_INDICES_STATUS_FILE = 'all_indices_option_chain_scheduler_status.json'
 ALL_BANKS_STATUS_FILE = 'all_banks_option_chain_scheduler_status.json'
-GAINERS_STATUS_FILE = 'gainers_scheduler_status.json'
-LOSERS_STATUS_FILE = 'losers_scheduler_status.json'
+ALL_GAINERS_LOSERS_STATUS_FILE = 'all_gainers_losers_scheduler_status.json'
 NEWS_COLLECTOR_STATUS_FILE = 'news_collector_scheduler_status.json'
 LIVEMINT_NEWS_STATUS_FILE = 'livemint_news_scheduler_status.json'
 
@@ -2221,6 +2219,14 @@ def get_index_collection(symbol: str):
     """Get MongoDB collection for a specific index symbol"""
     collector = NSEAllIndicesOptionChainCollector()
     collection = collector.get_collection(symbol)
+    return collector, collection
+
+
+# Helper function to get collection for gainers or losers
+def get_gainers_losers_collection(data_type: str):
+    """Get MongoDB collection for gainers or losers"""
+    collector = NSEAllGainersLosersCollector()
+    collection = collector.get_collection(data_type)
     return collector, collection
 
 
@@ -5692,8 +5698,13 @@ def get_gainers_next_run_time():
     return get_interval_scheduler_next_run_time("gainers_losers")
 
 
-def get_gainers_status():
-    """Get gainers scheduler status from file or calculate"""
+def get_all_gainers_losers_next_run_time():
+    """Calculate next scheduled run time for all gainers/losers using config"""
+    return get_interval_scheduler_next_run_time("gainers_losers")
+
+
+def get_all_gainers_losers_status():
+    """Get all gainers/losers scheduler status from file or calculate"""
     status = {
         "running": False,
         "pid": None,
@@ -5703,21 +5714,21 @@ def get_gainers_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('gainers_scheduler.py')
+    is_running, pid = check_scheduler_running('all_gainers_losers_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
     # Get next run time
     try:
-        next_run = get_gainers_next_run_time()
+        next_run = get_all_gainers_losers_next_run_time()
         status["next_run"] = next_run.isoformat() if next_run else None
     except Exception as e:
         status["next_run"] = None
     
     # Try to read status file
-    if os.path.exists(GAINERS_STATUS_FILE):
+    if os.path.exists(ALL_GAINERS_LOSERS_STATUS_FILE):
         try:
-            with open(GAINERS_STATUS_FILE, 'r') as f:
+            with open(ALL_GAINERS_LOSERS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
                 status["last_status"] = file_status.get("last_status", "unknown")
@@ -5728,6 +5739,22 @@ def get_gainers_status():
     if not status["running"] and not status["last_run"]:
         status["last_status"] = "not_started"
     
+    return status
+
+
+def get_gainers_status():
+    """Get gainers status from unified status file"""
+    status = get_all_gainers_losers_status()
+    # Extract gainers-specific result if available
+    if os.path.exists(ALL_GAINERS_LOSERS_STATUS_FILE):
+        try:
+            with open(ALL_GAINERS_LOSERS_STATUS_FILE, 'r') as f:
+                file_status = json.load(f)
+                results = file_status.get("results", {})
+                if "gainers" in results:
+                    status["gainers_success"] = results.get("gainers", False)
+        except:
+            pass
     return status
 
 
@@ -5761,13 +5788,19 @@ def api_gainers_data():
         
         skip = (page - 1) * limit
         
-        collector = NSEGainersCollector()
+        collector, collection = get_gainers_losers_collection("gainers")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for gainers"
+            }), 404
         
         # Get total count with filter
-        total_count = collector.collection.count_documents(query_filter)
+        total_count = collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find(query_filter).sort("timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find(query_filter).sort("timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -5818,12 +5851,18 @@ def api_gainers_data():
 def api_gainers_stats():
     """API endpoint to get gainers statistics"""
     try:
-        collector = NSEGainersCollector()
+        collector, collection = get_gainers_losers_collection("gainers")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for gainers"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest = collector.collection.find_one(sort=[("timestamp", -1)])
+        latest = collection.find_one(sort=[("timestamp", -1)])
         
         latest_timestamp = None
         nifty_count = 0
@@ -5866,18 +5905,9 @@ def api_gainers_stats():
 def api_gainers_trigger():
     """API endpoint to manually trigger gainers data collection"""
     try:
-        collector = NSEGainersCollector()
-        success = collector.collect_and_save()
+        collector = NSEAllGainersLosersCollector()
+        success = collector.collect_and_save_single("gainers")
         collector.close()
-        
-        # Update status file
-        status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
-            "last_status": "success" if success else "failed",
-            "manual_trigger": True
-        }
-        with open(GAINERS_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
         
         return jsonify({
             "success": success,
@@ -5895,7 +5925,13 @@ def api_gainers_trigger():
 def api_delete_gainers_data(record_id):
     """API endpoint to delete a specific gainers record"""
     try:
-        collector = NSEGainersCollector()
+        collector, collection = get_gainers_losers_collection("gainers")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for gainers"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
             collector.close()
@@ -5905,7 +5941,7 @@ def api_delete_gainers_data(record_id):
             }), 400
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -5933,41 +5969,18 @@ def get_losers_next_run_time():
 
 
 def get_losers_status():
-    """Get losers scheduler status from file or calculate"""
-    status = {
-        "running": False,
-        "pid": None,
-        "next_run": None,
-        "last_run": None,
-        "last_status": "unknown"
-    }
-    
-    # Check if process is running
-    is_running, pid = check_scheduler_running('losers_scheduler.py')
-    status["running"] = is_running
-    status["pid"] = pid
-    
-    # Get next run time
-    try:
-        next_run = get_losers_next_run_time()
-        status["next_run"] = next_run.isoformat() if next_run else None
-    except Exception as e:
-        status["next_run"] = None
-    
-    # Try to read status file
-    if os.path.exists(LOSERS_STATUS_FILE):
+    """Get losers status from unified status file"""
+    status = get_all_gainers_losers_status()
+    # Extract losers-specific result if available
+    if os.path.exists(ALL_GAINERS_LOSERS_STATUS_FILE):
         try:
-            with open(LOSERS_STATUS_FILE, 'r') as f:
+            with open(ALL_GAINERS_LOSERS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
-                status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
-        except Exception as e:
+                results = file_status.get("results", {})
+                if "losers" in results:
+                    status["losers_success"] = results.get("losers", False)
+        except:
             pass
-    
-    # If scheduler is not running and we have no last run info, set default message
-    if not status["running"] and not status["last_run"]:
-        status["last_status"] = "not_started"
-    
     return status
 
 
@@ -6001,13 +6014,19 @@ def api_losers_data():
         
         skip = (page - 1) * limit
         
-        collector = NSELosersCollector()
+        collector, collection = get_gainers_losers_collection("losers")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for losers"
+            }), 404
         
         # Get total count with filter
-        total_count = collector.collection.count_documents(query_filter)
+        total_count = collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find(query_filter).sort("timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find(query_filter).sort("timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -6058,12 +6077,18 @@ def api_losers_data():
 def api_losers_stats():
     """API endpoint to get losers statistics"""
     try:
-        collector = NSELosersCollector()
+        collector, collection = get_gainers_losers_collection("losers")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for losers"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest = collector.collection.find_one(sort=[("timestamp", -1)])
+        latest = collection.find_one(sort=[("timestamp", -1)])
         
         latest_timestamp = None
         nifty_count = 0
@@ -6106,18 +6131,9 @@ def api_losers_stats():
 def api_losers_trigger():
     """API endpoint to manually trigger losers data collection"""
     try:
-        collector = NSELosersCollector()
-        success = collector.collect_and_save()
+        collector = NSEAllGainersLosersCollector()
+        success = collector.collect_and_save_single("losers")
         collector.close()
-        
-        # Update status file
-        status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
-            "last_status": "success" if success else "failed",
-            "manual_trigger": True
-        }
-        with open(LOSERS_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
         
         return jsonify({
             "success": success,
@@ -6135,7 +6151,13 @@ def api_losers_trigger():
 def api_delete_losers_data(record_id):
     """API endpoint to delete a specific losers record"""
     try:
-        collector = NSELosersCollector()
+        collector, collection = get_gainers_losers_collection("losers")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for losers"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
             collector.close()
@@ -6145,7 +6167,7 @@ def api_delete_losers_data(record_id):
             }), 400
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -6780,8 +6802,7 @@ def start_all_schedulers_in_background():
         ('cronjob_scheduler', 'FII/DII Data Collector'),
         ('all_indices_option_chain_scheduler', 'All Indices Option Chain Collector (4 indices)'),
         ('all_banks_option_chain_scheduler', 'All Banks Option Chain Collector (12 banks)'),
-        ('gainers_scheduler', 'Top 20 Gainers Collector'),
-        ('losers_scheduler', 'Top 20 Losers Collector'),
+        ('all_gainers_losers_scheduler', 'All Gainers/Losers Collector (2 types)'),
         ('news_collector_scheduler', 'News Collector'),
         ('livemint_news_scheduler', 'LiveMint News Collector'),
     ]

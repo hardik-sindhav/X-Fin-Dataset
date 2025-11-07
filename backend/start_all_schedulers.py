@@ -93,13 +93,9 @@ def main():
     # List of all schedulers
     schedulers = [
         ('cronjob_scheduler', 'FII/DII Data Collector'),
-        ('option_chain_scheduler', 'NIFTY Option Chain Collector'),
-        ('banknifty_option_chain_scheduler', 'BankNifty Option Chain Collector'),
-        ('finnifty_option_chain_scheduler', 'Finnifty Option Chain Collector'),
-        ('midcpnifty_option_chain_scheduler', 'MidcapNifty Option Chain Collector'),
+        ('all_indices_option_chain_scheduler', 'All Indices Option Chain Collector (4 indices)'),
         ('all_banks_option_chain_scheduler', 'All Banks Option Chain Collector (12 banks)'),
-        ('gainers_scheduler', 'Top 20 Gainers Collector'),
-        ('losers_scheduler', 'Top 20 Losers Collector'),
+        ('all_gainers_losers_scheduler', 'All Gainers/Losers Collector (2 types)'),
         ('news_collector_scheduler', 'News Collector'),
         ('livemint_news_scheduler', 'LiveMint News Collector'),
     ]
