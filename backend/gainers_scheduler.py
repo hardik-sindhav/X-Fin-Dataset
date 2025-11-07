@@ -10,6 +10,7 @@ import logging
 from nse_gainers_collector import NSEGainersCollector
 from datetime import datetime, time as dt_time, timedelta, date, timezone
 from scheduler_config import get_config_for_scheduler, is_holiday
+from timezone_utils import get_ist_now, now_for_mongo
 import json
 import os
 
@@ -89,7 +90,7 @@ def run_collector():
         return
     
     # Check minimum interval
-    now = datetime.now(timezone.utc)
+    now_ist = get_ist_now()
     config = get_scheduler_config()
     interval_minutes = config.get("interval_minutes", 3)
     min_interval_seconds = interval_minutes * 60 - 10  # Allow 10 seconds buffer
@@ -98,21 +99,23 @@ def run_collector():
     lock_acquired = True
     try:
         if last_run_time:
-            time_since_last_run = (now - last_run_time).total_seconds()
+            time_since_last_run = (now_ist - last_run_time).total_seconds()
             if time_since_last_run < min_interval_seconds:
                 logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
+                lock_acquired = False
                 return
         
         # Check if it's market hours before running
-        if not is_market_hours(now):
-            logger.info(f"Outside market hours. Current time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+        if not is_market_hours(now_ist):
+            logger.info(f"Outside market hours. Current time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
+            lock_acquired = False
             return
         
         logger.info("=" * 60)
-        logger.info(f"Top 20 Gainers Cronjob triggered at {now}")
+        logger.info(f"Top 20 Gainers Cronjob triggered at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
         logger.info("=" * 60)
         
-        last_run_time = now
+        last_run_time = now_ist
         
         collector = NSEGainersCollector()
         success = collector.collect_and_save()
@@ -124,7 +127,7 @@ def run_collector():
         
         # Update status file
         status_data = {
-            "last_run": now.isoformat(),
+            "last_run": now_for_mongo().isoformat(),
             "last_status": "success" if success else "failed"
         }
         try:
@@ -137,7 +140,7 @@ def run_collector():
         logger.error(f"Top 20 Gainers Cronjob failed with error: {str(e)}")
         # Update status file with error
         status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
+            "last_run": now_for_mongo().isoformat(),
             "last_status": "error"
         }
         try:
@@ -174,6 +177,13 @@ def main():
     schedule.every(interval).minutes.do(run_collector)
     
     logger.info("Scheduler configured. Waiting for scheduled times...")
+    
+    # Run immediately if within market hours (for testing and immediate execution)
+    from timezone_utils import get_ist_now
+    now_ist = get_ist_now()
+    if is_market_hours(now_ist):
+        logger.info(f"Market is open. Running collector immediately at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
+        run_collector()
     
     # Keep the script running
     try:

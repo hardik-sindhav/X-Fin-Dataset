@@ -1,6 +1,6 @@
 """
-NSE ICICI Bank Option Chain Data Collector
-Collects data from NSE API and stores in MongoDB
+NSE All Indices Option Chain Data Collector
+Collects data from NSE API for all 4 indices and stores in MongoDB
 Runs Monday to Friday from 09:15 AM to 03:30 PM, every 3 minutes
 """
 
@@ -9,53 +9,49 @@ import pymongo
 from pymongo import MongoClient
 from datetime import datetime
 import time
-import logging
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import os
 from dotenv import load_dotenv
 from redis_expiry_cache import get_expiry_cache
 from urllib.parse import quote_plus
 from timezone_utils import now_for_mongo
+from logger_config import get_logger
 
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('icicibank_option_chain_collector.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# Get logger
+logger = get_logger(__name__)
 
 # Configuration
-EXPIRY_API_URL = "https://www.nseindia.com/api/option-chain-contract-info?symbol=ICICIBANK"
 OPTION_CHAIN_API_URL = "https://www.nseindia.com/api/option-chain-v3"
-SYMBOL = "ICICIBANK"
-TYPE = "Equity"  # Use Equity type for stocks
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds
+
+# List of all 4 indices to collect
+INDICES = [
+    {"symbol": "NIFTY", "collection": "nifty_option_chain_data"},
+    {"symbol": "BANKNIFTY", "collection": "banknifty_option_chain_data"},
+    {"symbol": "FINNIFTY", "collection": "finnifty_option_chain_data"},
+    {"symbol": "MIDCPNIFTY", "collection": "midcpnifty_option_chain_data"},
+]
 
 # MongoDB Configuration (can be overridden by environment variables)
 MONGO_HOST = os.getenv('MONGO_HOST', 'localhost')
 MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
 MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'nse_data')
-MONGO_COLLECTION_NAME = os.getenv('MONGO_ICICIBANK_OPTION_CHAIN_COLLECTION_NAME', 'icicibank_option_chain_data')
 MONGO_USERNAME = os.getenv('MONGO_USERNAME', None)
 MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', None)
 
 
-class NSEICICIBankOptionChainCollector:
-    """Collects and stores NSE ICICI Bank Option Chain data in MongoDB"""
+class NSEAllIndicesOptionChainCollector:
+    """Collects and stores NSE Option Chain data for all indices in MongoDB"""
     
     def __init__(self):
         """Initialize MongoDB connection"""
         self.client = None
         self.db = None
-        self.collection = None
+        self.collections = {}  # Store collection references for each index
         self.expiry_cache = get_expiry_cache()
         self._connect_mongo()
     
@@ -77,12 +73,20 @@ class NSEICICIBankOptionChainCollector:
             # Test connection
             self.client.admin.command('ping')
             self.db = self.client[MONGO_DB_NAME]
-            self.collection = self.db[MONGO_COLLECTION_NAME]
             
-            # Create unique index on timestamp to prevent duplicates
-            self.collection.create_index([("records.timestamp", 1)], unique=True)
+            # Create collection references for all indices
+            for index in INDICES:
+                collection_name = os.getenv(
+                    f'MONGO_{index["symbol"]}_OPTION_CHAIN_COLLECTION_NAME',
+                    index["collection"]
+                )
+                collection = self.db[collection_name]
+                # Create unique index on timestamp to prevent duplicates
+                collection.create_index([("records.timestamp", 1)], unique=True)
+                self.collections[index["symbol"]] = collection
             
-            logger.info(f"Successfully connected to MongoDB at {MONGO_HOST}:{MONGO_PORT}")
+            logger.debug(f"Successfully connected to MongoDB at {MONGO_HOST}:{MONGO_PORT}")
+            logger.debug(f"Initialized collections for {len(INDICES)} indices")
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {str(e)}")
             raise
@@ -97,27 +101,27 @@ class NSEICICIBankOptionChainCollector:
             'Origin': 'https://www.nseindia.com'
         }
     
-    def _fetch_expiry_dates_with_retry(self) -> Optional[str]:
+    def _fetch_expiry_dates_with_retry(self, symbol: str) -> Optional[str]:
         """
         Fetch expiry dates from NSE API with retry logic
         First checks Redis cache, then fetches from API if not cached
         Returns: First expiry date string (e.g., "25-Nov-2025") or None if all retries fail
         """
         # First, try to get from Redis cache
-        cached_expiry = self.expiry_cache.get_expiry(SYMBOL)
+        cached_expiry = self.expiry_cache.get_expiry(symbol)
         if cached_expiry:
-            logger.info(f"Using cached {SYMBOL} expiry date: {cached_expiry}")
+            logger.debug(f"Using cached {symbol} expiry date: {cached_expiry}")
             return cached_expiry
         
         # If not in cache, fetch from API
-        logger.info(f"{SYMBOL} expiry date not found in cache, fetching from API...")
+        expiry_api_url = f"https://www.nseindia.com/api/option-chain-contract-info?symbol={symbol}"
         headers = self._get_headers()
         
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                logger.info(f"Fetching expiry dates for {SYMBOL} from API (Attempt {attempt}/{MAX_RETRIES})")
+                logger.debug(f"Fetching expiry dates for {symbol} from API (Attempt {attempt}/{MAX_RETRIES})")
                 
-                response = requests.get(EXPIRY_API_URL, headers=headers, timeout=30)
+                response = requests.get(expiry_api_url, headers=headers, timeout=30)
                 response.raise_for_status()
                 
                 data = response.json()
@@ -125,67 +129,60 @@ class NSEICICIBankOptionChainCollector:
                 # Extract expiry dates
                 expiry_dates = data.get("expiryDates", [])
                 
-                if not expiry_dates or not isinstance(expiry_dates, list):
-                    logger.error(f"Unexpected expiry dates format: {type(expiry_dates)}")
+                if not expiry_dates or not isinstance(expiry_dates, list) or len(expiry_dates) == 0:
+                    logger.warning(f"No expiry dates found for {symbol}")
                     if attempt < MAX_RETRIES:
-                        logger.info(f"Retrying in {RETRY_DELAY} seconds...")
-                        time.sleep(RETRY_DELAY)
-                        continue
-                    return None
-                
-                if len(expiry_dates) == 0:
-                    logger.error("No expiry dates found in response")
-                    if attempt < MAX_RETRIES:
-                        logger.info(f"Retrying in {RETRY_DELAY} seconds...")
+                        logger.debug(f"Retrying in {RETRY_DELAY} seconds...")
                         time.sleep(RETRY_DELAY)
                         continue
                     return None
                 
                 # Always pick the first expiry date
                 first_expiry = expiry_dates[0]
-                logger.info(f"Successfully fetched {SYMBOL} expiry dates. Using first expiry: {first_expiry}")
+                logger.debug(f"Successfully fetched {symbol} expiry dates. Using first expiry: {first_expiry}")
                 
                 # Cache the expiry date for today
                 try:
-                    self.expiry_cache.set_expiry(SYMBOL, first_expiry)
-                    logger.info(f"Cached {SYMBOL} expiry date: {first_expiry}")
+                    self.expiry_cache.set_expiry(symbol, first_expiry)
                 except Exception as cache_error:
-                    logger.warning(f"Failed to cache expiry date: {str(cache_error)}")
+                    logger.warning(f"Failed to cache expiry date for {symbol}: {str(cache_error)}")
                     # Continue even if caching fails
                 
                 return first_expiry
                 
             except requests.exceptions.RequestException as e:
-                logger.error(f"Request failed (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
+                logger.warning(f"Request failed for {symbol} (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
                 if attempt < MAX_RETRIES:
                     logger.info(f"Retrying in {RETRY_DELAY} seconds...")
                     time.sleep(RETRY_DELAY)
                 else:
-                    logger.error(f"All retry attempts failed for {SYMBOL} expiry dates")
+                    logger.error(f"All retry attempts failed for {symbol} expiry dates")
                     
             except Exception as e:
-                logger.error(f"Unexpected error (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
+                logger.warning(f"Unexpected error for {symbol} (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
                 if attempt < MAX_RETRIES:
                     logger.info(f"Retrying in {RETRY_DELAY} seconds...")
                     time.sleep(RETRY_DELAY)
                 else:
-                    logger.error(f"All retry attempts failed for {SYMBOL} expiry dates")
+                    logger.error(f"All retry attempts failed for {symbol} expiry dates")
         
         return None
     
-    def _fetch_option_chain_with_retry(self, expiry_date: str) -> Optional[Dict]:
+    def _fetch_option_chain_with_retry(self, symbol: str, expiry_date: str) -> Optional[Dict]:
         """
         Fetch option chain data from NSE API with retry logic
         Args:
+            symbol: Index symbol (e.g., "NIFTY")
             expiry_date: Expiry date string (e.g., "25-Nov-2025")
         Returns: Full API response as dict or None if all retries fail
         """
         headers = self._get_headers()
-        url = f"{OPTION_CHAIN_API_URL}?type={TYPE}&symbol={SYMBOL}&expiry={expiry_date}"
+        # For indices, use type=Indices parameter
+        url = f"{OPTION_CHAIN_API_URL}?type=Indices&symbol={symbol}&expiry={expiry_date}"
         
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                logger.info(f"Fetching option chain data for {SYMBOL} expiry {expiry_date} (Attempt {attempt}/{MAX_RETRIES})")
+                logger.debug(f"Fetching option chain data for {symbol} expiry {expiry_date} (Attempt {attempt}/{MAX_RETRIES})")
                 
                 response = requests.get(url, headers=headers, timeout=30)
                 response.raise_for_status()
@@ -194,9 +191,9 @@ class NSEICICIBankOptionChainCollector:
                 
                 # Validate response structure
                 if not isinstance(data, dict):
-                    logger.error(f"Unexpected data format: {type(data)}")
+                    logger.warning(f"Unexpected data format for {symbol}: {type(data)}")
                     if attempt < MAX_RETRIES:
-                        logger.info(f"Retrying in {RETRY_DELAY} seconds...")
+                        logger.debug(f"Retrying in {RETRY_DELAY} seconds...")
                         time.sleep(RETRY_DELAY)
                         continue
                     return None
@@ -206,55 +203,60 @@ class NSEICICIBankOptionChainCollector:
                 timestamp = records.get("timestamp") if isinstance(records, dict) else None
                 
                 if not timestamp:
-                    logger.error("Timestamp not found in option chain response")
+                    logger.warning(f"Timestamp not found in option chain response for {symbol}")
                     if attempt < MAX_RETRIES:
-                        logger.info(f"Retrying in {RETRY_DELAY} seconds...")
+                        logger.debug(f"Retrying in {RETRY_DELAY} seconds...")
                         time.sleep(RETRY_DELAY)
                         continue
                     return None
                 
-                logger.info(f"Successfully fetched option chain data. Timestamp: {timestamp}")
+                logger.debug(f"Successfully fetched option chain data for {symbol}. Timestamp: {timestamp}")
                 return data
                 
             except requests.exceptions.RequestException as e:
-                logger.error(f"Request failed (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
+                logger.warning(f"Request failed for {symbol} (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
                 if attempt < MAX_RETRIES:
                     logger.info(f"Retrying in {RETRY_DELAY} seconds...")
                     time.sleep(RETRY_DELAY)
                 else:
-                    logger.error("All retry attempts failed for option chain data")
+                    logger.error(f"All retry attempts failed for {symbol} option chain data")
                     
             except Exception as e:
-                logger.error(f"Unexpected error (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
+                logger.warning(f"Unexpected error for {symbol} (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
                 if attempt < MAX_RETRIES:
                     logger.info(f"Retrying in {RETRY_DELAY} seconds...")
                     time.sleep(RETRY_DELAY)
                 else:
-                    logger.error("All retry attempts failed for option chain data")
+                    logger.error(f"All retry attempts failed for {symbol} option chain data")
         
         return None
     
-    def _save_to_mongo(self, data: Dict) -> bool:
+    def _save_to_mongo(self, symbol: str, data: Dict) -> bool:
         """
-        Save entire option chain response to MongoDB
+        Save entire option chain response to MongoDB for a specific index
         Uses timestamp field as unique identifier to prevent duplicates
         Returns: True if successful, False otherwise
         """
         if not data:
-            logger.warning("No data to save")
+            logger.warning(f"No data to save for {symbol}")
             return False
         
         try:
+            collection = self.collections.get(symbol)
+            if collection is None:
+                logger.error(f"Collection not found for {symbol}")
+                return False
+            
             # Extract timestamp for duplicate check
             records = data.get("records", {})
             timestamp = records.get("timestamp") if isinstance(records, dict) else None
             
             if not timestamp:
-                logger.error("Cannot save: timestamp not found in data")
+                logger.error(f"Cannot save {symbol}: timestamp not found in data")
                 return False
             
             # Use upsert with timestamp as unique identifier
-            result = self.collection.update_one(
+            result = collection.update_one(
                 {"records.timestamp": timestamp},
                 {
                     "$set": {
@@ -269,89 +271,122 @@ class NSEICICIBankOptionChainCollector:
             )
             
             if result.upserted_id:
-                logger.info(f"Inserted new record with timestamp: {timestamp}")
+                logger.debug(f"Inserted new record for {symbol} with timestamp: {timestamp}")
                 return True
             elif result.modified_count > 0:
-                logger.info(f"Updated existing record with timestamp: {timestamp}")
+                logger.debug(f"Updated existing record for {symbol} with timestamp: {timestamp}")
                 return True
             else:
-                logger.debug(f"Record with timestamp {timestamp} already exists (no changes)")
+                logger.debug(f"Record for {symbol} with timestamp {timestamp} already exists (no changes)")
                 return True  # Still considered successful if no duplicates
                 
         except pymongo.errors.DuplicateKeyError:
-            logger.warning(f"Duplicate record skipped for timestamp: {timestamp}")
+            logger.debug(f"Duplicate record skipped for {symbol} timestamp: {timestamp}")
             return True  # Duplicate prevention working correctly
             
         except Exception as e:
-            logger.error(f"Failed to save data to MongoDB: {str(e)}")
+            logger.error(f"Failed to save {symbol} data to MongoDB: {str(e)}")
             return False
     
-    def collect_and_save(self) -> bool:
+    def collect_and_save_single_index(self, index: Dict) -> bool:
         """
-        Main method to collect option chain data and save to MongoDB
+        Collect option chain data for a single index and save to MongoDB
+        Args:
+            index: Index dictionary with 'symbol' and 'collection' keys
         Returns: True if successful, False otherwise
         """
+        symbol = index["symbol"]
         try:
-            logger.info(f"Starting NSE {SYMBOL} option chain data collection...")
+            logger.debug(f"Starting NSE {symbol} option chain data collection...")
             
             # Step 1: Fetch expiry dates and pick the first one
-            expiry_date = self._fetch_expiry_dates_with_retry()
+            expiry_date = self._fetch_expiry_dates_with_retry(symbol)
             
             if not expiry_date:
-                logger.error("Failed to fetch expiry dates after all retries")
+                logger.error(f"Failed to fetch expiry dates for {symbol} after all retries")
                 return False
             
             # Step 2: Fetch option chain data using the first expiry date
-            option_chain_data = self._fetch_option_chain_with_retry(expiry_date)
+            option_chain_data = self._fetch_option_chain_with_retry(symbol, expiry_date)
             
             if option_chain_data is None:
-                logger.error("Failed to fetch option chain data after all retries")
+                logger.error(f"Failed to fetch option chain data for {symbol} after all retries")
                 return False
             
             # Step 3: Save entire response to MongoDB
-            success = self._save_to_mongo(option_chain_data)
+            success = self._save_to_mongo(symbol, option_chain_data)
             
             if success:
-                logger.info(f"NSE {SYMBOL} option chain data collection completed successfully")
+                logger.debug(f"NSE {symbol} option chain data collection completed successfully")
             else:
-                logger.error("Failed to save option chain data to MongoDB")
+                logger.warning(f"Failed to save {symbol} option chain data to MongoDB")
             
             return success
             
         except Exception as e:
-            logger.error(f"Unexpected error in collect_and_save: {str(e)}")
+            logger.error(f"Unexpected error in collect_and_save_single_index for {symbol}: {str(e)}", exc_info=True)
             return False
     
-    def get_current_expiry(self) -> Optional[str]:
+    def collect_and_save_all_indices(self) -> Dict[str, bool]:
         """
-        Get current expiry date from cache or API
-        Returns: Expiry date string or None
+        Main method to collect option chain data for all indices and save to MongoDB
+        Returns: Dictionary mapping index symbols to success status
         """
-        # Try cache first
-        cached_expiry = self.expiry_cache.get_expiry(SYMBOL)
-        if cached_expiry:
-            return cached_expiry
+        results = {}
+        logger.debug(f"Starting NSE All Indices Option Chain data collection for {len(INDICES)} indices...")
         
-        # If not in cache, try to fetch (this will cache it)
-        return self._fetch_expiry_dates_with_retry()
+        for index in INDICES:
+            symbol = index["symbol"]
+            try:
+                success = self.collect_and_save_single_index(index)
+                results[symbol] = success
+                
+                # Small delay between indices to avoid overwhelming the API
+                time.sleep(1)
+                
+            except Exception as e:
+                logger.error(f"Error collecting data for {symbol}: {str(e)}", exc_info=True)
+                results[symbol] = False
+        
+        # Summary
+        successful = sum(1 for success in results.values() if success)
+        failed = len(results) - successful
+        
+        if failed > 0:
+            logger.warning(f"All Indices Option Chain collection completed: {successful} successful, {failed} failed")
+        else:
+            logger.debug(f"All Indices Option Chain collection completed: {successful} successful, {failed} failed")
+        
+        return results
+    
+    def get_collection(self, symbol: str):
+        """
+        Get MongoDB collection for a specific index symbol
+        Args:
+            symbol: Index symbol (e.g., "NIFTY")
+        Returns: MongoDB collection object or None if not found
+        """
+        return self.collections.get(symbol)
     
     def close(self):
         """Close MongoDB connection"""
         if self.client:
             self.client.close()
-            logger.info("MongoDB connection closed")
+            logger.debug("MongoDB connection closed")
 
 
 def main():
     """Main execution function"""
     collector = None
     try:
-        collector = NSEICICIBankOptionChainCollector()
-        success = collector.collect_and_save()
-        exit_code = 0 if success else 1
+        collector = NSEAllIndicesOptionChainCollector()
+        results = collector.collect_and_save_all_indices()
+        
+        # Exit with error code if any index failed
+        exit_code = 0 if all(results.values()) else 1
         exit(exit_code)
     except Exception as e:
-        logger.error(f"Fatal error: {str(e)}")
+        logger.error(f"Fatal error: {str(e)}", exc_info=True)
         exit(1)
     finally:
         if collector:

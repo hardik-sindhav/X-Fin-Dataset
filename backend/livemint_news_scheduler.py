@@ -10,6 +10,7 @@ import threading
 from nse_livemint_news_collector import NSELiveMintNewsCollector
 from datetime import datetime, time as dt_time, timedelta, date, timezone
 from scheduler_config import get_config_for_scheduler, is_holiday
+from timezone_utils import get_ist_now, now_for_mongo
 import json
 import os
 
@@ -89,31 +90,30 @@ def run_collector():
         return
     
     # Check minimum interval
-    now = datetime.now(timezone.utc)
+    now_ist = get_ist_now()
     config = get_scheduler_config()
     interval_minutes = config.get("interval_minutes", 15)
     min_interval_seconds = interval_minutes * 60 - 30  # Allow 30 seconds buffer
     
-    if last_run_time:
-        time_since_last_run = (now - last_run_time).total_seconds()
-        if time_since_last_run < min_interval_seconds:
-            execution_lock.release()
-            logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
-            return
-    
     collector = None
+    lock_acquired = True
     try:
+        if last_run_time:
+            time_since_last_run = (now_ist - last_run_time).total_seconds()
+            if time_since_last_run < min_interval_seconds:
+                logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
+                return
+        
         # Check if it's market hours before running
-        if not is_market_hours(now):
-            logger.info(f"Outside market hours. Current time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-            execution_lock.release()
+        if not is_market_hours(now_ist):
+            logger.info(f"Outside market hours. Current time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
             return
         
         logger.info("=" * 60)
-        logger.info(f"LiveMint News Collector Cronjob triggered at {now}")
+        logger.info(f"LiveMint News Collector Cronjob triggered at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
         logger.info("=" * 60)
         
-        last_run_time = now
+        last_run_time = now_ist
         collector = NSELiveMintNewsCollector()
         success = collector.collect_and_save()
         
@@ -124,7 +124,7 @@ def run_collector():
         
         # Update status file
         status_data = {
-            "last_run": now.isoformat(),
+            "last_run": now_for_mongo().isoformat(),
             "last_status": "success" if success else "failed"
         }
         try:
@@ -137,7 +137,7 @@ def run_collector():
         logger.error(f"LiveMint News Collector Cronjob failed with error: {str(e)}")
         # Update status file with error
         status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
+            "last_run": now_for_mongo().isoformat(),
             "last_status": "error"
         }
         try:
@@ -148,7 +148,8 @@ def run_collector():
     finally:
         if collector:
             collector.close()
-        execution_lock.release()
+        if lock_acquired:
+            execution_lock.release()
         logger.info("=" * 60)
 
 
@@ -173,6 +174,13 @@ def main():
     schedule.every(interval).minutes.do(run_collector)
     
     logger.info("Scheduler configured. Waiting for scheduled times...")
+    
+    # Run immediately if within market hours (for testing and immediate execution)
+    from timezone_utils import get_ist_now
+    now_ist = get_ist_now()
+    if is_market_hours(now_ist):
+        logger.info(f"Market is open. Running collector immediately at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
+        run_collector()
     
     # Keep the script running
     try:

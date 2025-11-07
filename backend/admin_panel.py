@@ -5,28 +5,16 @@ Web interface to monitor cronjob status and view data
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from bson import ObjectId
 from nse_fiidii_collector import NSEDataCollector
-from nse_option_chain_collector import NSEOptionChainCollector
+from nse_all_indices_option_chain_collector import NSEAllIndicesOptionChainCollector, INDICES
 from scheduler_config import (
     get_all_config, get_config_for_scheduler, update_scheduler_config,
     get_holidays, add_holiday, remove_holiday, is_holiday
 )
-from nse_banknifty_option_chain_collector import NSEBankNiftyOptionChainCollector
-from nse_finnifty_option_chain_collector import NSEFinniftyOptionChainCollector
-from nse_midcpnifty_option_chain_collector import NSEMidcapNiftyOptionChainCollector
-from nse_hdfcbank_option_chain_collector import NSEHDFCBankOptionChainCollector
-from nse_icicibank_option_chain_collector import NSEICICIBankOptionChainCollector
-from nse_sbin_option_chain_collector import NSESBINOptionChainCollector
-from nse_kotakbank_option_chain_collector import NSEKotakBankOptionChainCollector
-from nse_axisbank_option_chain_collector import NSEAxisBankOptionChainCollector
-from nse_bankbaroda_option_chain_collector import NSEBankBarodaOptionChainCollector
-from nse_pnb_option_chain_collector import NSEPNBOptionChainCollector
-from nse_canbk_option_chain_collector import NSECANBKOptionChainCollector
-from nse_aubank_option_chain_collector import NSEAUBANKOptionChainCollector
-from nse_indusindbk_option_chain_collector import NSEIndusIndBkOptionChainCollector
-from nse_idfcfirstb_option_chain_collector import NSEIDFCFIRSTBOptionChainCollector
-from nse_federalbnk_option_chain_collector import NSEFEDERALBNKOptionChainCollector
+from nse_all_banks_option_chain_collector import NSEAllBanksOptionChainCollector, BANKS
 from nse_gainers_collector import NSEGainersCollector
 from nse_losers_collector import NSELosersCollector
 from nse_news_collector import NSENewsCollector
@@ -37,6 +25,7 @@ import schedule
 import json
 import os
 from datetime import datetime, timedelta, time as dt_time, timezone
+from logger_config import setup_logging, get_logger, configure_flask_logging
 import threading
 import time as time_module
 import psutil
@@ -45,12 +34,108 @@ import jwt
 from functools import wraps
 from werkzeug.security import check_password_hash, generate_password_hash
 from urllib.parse import quote_plus
+from validation_schemas import (
+    LoginSchema, CombinedPaginationDateSchema, SchedulerConfigSchema,
+    ConfigUpdateSchema, HolidaySchema
+)
+from validation_utils import (
+    validate_json_body, validate_query_params, validate_path_param
+)
+from marshmallow import ValidationError
 
 app = Flask(__name__)
 
+# Setup centralized logging configuration
+# Check if log file path is configured
+log_file = os.getenv('LOG_FILE', None)
+if log_file:
+    # Create logs directory if it doesn't exist
+    log_dir = os.path.dirname(log_file) if os.path.dirname(log_file) else None
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+
+setup_logging(log_file=log_file)
+configure_flask_logging(app)
+
+# Get logger for this module
+logger = get_logger(__name__)
+
+# Security: Set maximum content length to prevent DoS attacks
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max request size
+
+# Security: Disable debug mode in production
+if os.getenv('FLASK_ENV') == 'production':
+    app.config['DEBUG'] = False
+else:
+    app.config['DEBUG'] = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+
+# Rate Limiting Configuration
+# Use Redis if available, otherwise use in-memory storage
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
+REDIS_DB = int(os.getenv('REDIS_DB', 0))
+REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
+
+# Test Redis connection before using it
+redis_available = False
+if REDIS_HOST and REDIS_PORT:
+    try:
+        import redis
+        redis_client = redis.Redis(
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            db=REDIS_DB,
+            password=REDIS_PASSWORD,
+            socket_connect_timeout=2,  # 2 second timeout
+            socket_timeout=2
+        )
+        # Test connection
+        redis_client.ping()
+        redis_available = True
+        logger.info(f"Redis connection successful at {REDIS_HOST}:{REDIS_PORT}")
+        redis_client.close()
+    except Exception as e:
+        logger.warning(f"Redis not available for rate limiting: {str(e)}. Using in-memory storage.")
+        redis_available = False
+
+if redis_available:
+    # Use Redis for rate limiting (better for production)
+    try:
+        if REDIS_PASSWORD:
+            redis_url = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+        else:
+            redis_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+        
+        limiter = Limiter(
+            app=app,
+            key_func=get_remote_address,
+            storage_uri=redis_url,
+            default_limits=["200 per day", "50 per hour"],
+            strategy="fixed-window",
+            headers_enabled=True,
+            swallow_errors=True  # Don't fail if Redis connection is lost during runtime
+        )
+        logger.debug("Rate limiting configured with Redis")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Redis limiter: {str(e)}. Falling back to in-memory storage.")
+        redis_available = False
+
+if not redis_available:
+    # Fallback to in-memory storage if Redis is not available
+    limiter = Limiter(
+        app=app,
+        key_func=get_remote_address,
+        default_limits=["200 per day", "50 per hour"],
+        strategy="fixed-window",
+        headers_enabled=True
+    )
+    logger.debug("Rate limiting configured with in-memory storage (Redis not available)")
+
 # Configure CORS to allow requests from frontend domain
-# Default: allow all origins (can be restricted via CORS_ORIGINS env var)
+# SECURITY: In production, CORS_ORIGINS must be set to restrict access
 allowed_origins_env = os.getenv('CORS_ORIGINS', '')
+flask_env = os.getenv('FLASK_ENV', 'production')
+
 if allowed_origins_env:
     allowed_origins = [origin.strip() for origin in allowed_origins_env.split(',')]
     CORS(app, 
@@ -60,8 +145,29 @@ if allowed_origins_env:
              "allow_headers": ["Content-Type", "Authorization"],
              "supports_credentials": True
          }})
+elif flask_env == 'production':
+    # In production, if CORS_ORIGINS is not set, restrict to localhost only
+    # This prevents accidental exposure while still allowing local access
+    import warnings
+    warnings.warn(
+        "CORS_ORIGINS not set in production. Restricting to localhost only. "
+        "Set CORS_ORIGINS environment variable to allow your frontend domain.",
+        UserWarning
+    )
+    CORS(app, 
+         resources={r"/api/*": {
+             "origins": ["http://localhost:*", "https://localhost:*"],
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+             "allow_headers": ["Content-Type", "Authorization"]
+         }})
 else:
-    # Allow all origins (for development and cross-domain requests)
+    # Development mode: allow all origins (not recommended for production)
+    import warnings
+    warnings.warn(
+        "CORS is allowing all origins. This is only safe for development. "
+        "Set CORS_ORIGINS environment variable for production.",
+        UserWarning
+    )
     CORS(app, 
          resources={r"/api/*": {
              "origins": "*",
@@ -70,9 +176,21 @@ else:
          }})
 
 # JWT Configuration
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', None)
 JWT_ALGORITHM = 'HS256'
-JWT_EXPIRATION_HOURS = 24
+JWT_EXPIRATION_HOURS = int(os.getenv('JWT_EXPIRATION_HOURS', '2'))  # Default 2 hours, was 24
+
+# Validate JWT secret key on startup
+if not JWT_SECRET_KEY:
+    raise ValueError(
+        "JWT_SECRET_KEY environment variable is required. "
+        "Generate a secure key: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+    )
+if len(JWT_SECRET_KEY) < 32:
+    raise ValueError(
+        f"JWT_SECRET_KEY must be at least 32 characters long. "
+        f"Current length: {len(JWT_SECRET_KEY)}"
+    )
 
 # Admin credentials loaded from environment variables
 # Option 1: Set plain password in .env (recommended for simplicity)
@@ -81,30 +199,24 @@ ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', None)  # Plain password from .env
 ADMIN_PASSWORD_HASH = os.getenv('ADMIN_PASSWORD_HASH', None)  # Pre-hashed password from .env
 
-# If neither password nor hash is set, use default (for development only)
+# SECURITY: Require admin credentials to be explicitly configured
 if not ADMIN_PASSWORD and not ADMIN_PASSWORD_HASH:
-    ADMIN_PASSWORD_HASH = generate_password_hash('admin123')  # Default: admin123
-elif ADMIN_PASSWORD:
+    raise ValueError(
+        "Admin credentials must be configured. "
+        "Set either ADMIN_PASSWORD or ADMIN_PASSWORD_HASH in your .env file. "
+        "To generate a password hash: python -c \"from werkzeug.security import generate_password_hash; print(generate_password_hash('your_password'))\""
+    )
+
+if ADMIN_PASSWORD:
     # If plain password is provided, hash it
+    # Validate password strength
+    if len(ADMIN_PASSWORD) < 8:
+        raise ValueError("ADMIN_PASSWORD must be at least 8 characters long")
     ADMIN_PASSWORD_HASH = generate_password_hash(ADMIN_PASSWORD)
 
 STATUS_FILE = 'scheduler_status.json'
-OPTION_CHAIN_STATUS_FILE = 'option_chain_scheduler_status.json'
-BANKNIFTY_STATUS_FILE = 'banknifty_option_chain_scheduler_status.json'
-FINNIFTY_STATUS_FILE = 'finnifty_option_chain_scheduler_status.json'
-MIDCPNIFTY_STATUS_FILE = 'midcpnifty_option_chain_scheduler_status.json'
-HDFCBANK_STATUS_FILE = 'hdfcbank_option_chain_scheduler_status.json'
-ICICIBANK_STATUS_FILE = 'icicibank_option_chain_scheduler_status.json'
-SBIN_STATUS_FILE = 'sbin_option_chain_scheduler_status.json'
-KOTAKBANK_STATUS_FILE = 'kotakbank_option_chain_scheduler_status.json'
-AXISBANK_STATUS_FILE = 'axisbank_option_chain_scheduler_status.json'
-BANKBARODA_STATUS_FILE = 'bankbaroda_option_chain_scheduler_status.json'
-PNB_STATUS_FILE = 'pnb_option_chain_scheduler_status.json'
-CANBK_STATUS_FILE = 'canbk_option_chain_scheduler_status.json'
-AUBANK_STATUS_FILE = 'aubank_option_chain_scheduler_status.json'
-INDUSINDBK_STATUS_FILE = 'indusindbk_option_chain_scheduler_status.json'
-IDFCFIRSTB_STATUS_FILE = 'idfcfirstb_option_chain_scheduler_status.json'
-FEDERALBNK_STATUS_FILE = 'federalbnk_option_chain_scheduler_status.json'
+ALL_INDICES_STATUS_FILE = 'all_indices_option_chain_scheduler_status.json'
+ALL_BANKS_STATUS_FILE = 'all_banks_option_chain_scheduler_status.json'
 GAINERS_STATUS_FILE = 'gainers_scheduler_status.json'
 LOSERS_STATUS_FILE = 'losers_scheduler_status.json'
 NEWS_COLLECTOR_STATUS_FILE = 'news_collector_scheduler_status.json'
@@ -241,6 +353,155 @@ def get_scheduler_status():
     return status
 
 
+def safe_error_response(error: Exception, default_message: str = "An error occurred") -> tuple:
+    """
+    Create a safe error response that doesn't leak internal information.
+    Logs full error details server-side, returns generic message to client.
+    """
+    logger = get_logger(__name__)
+    
+    # Log full error details server-side
+    logger.error(f"Error: {type(error).__name__}: {str(error)}", exc_info=True)
+    
+    # Return generic error message to client (don't leak internal details)
+    is_production = os.getenv('FLASK_ENV') == 'production'
+    if is_production:
+        return jsonify({
+            "success": False,
+            "error": default_message
+        }), 500
+    else:
+        # In development, show more details
+        return jsonify({
+            "success": False,
+            "error": str(error),
+            "type": type(error).__name__
+        }), 500
+
+
+# ============================================================================
+# GLOBAL ERROR HANDLERS
+# ============================================================================
+
+@app.errorhandler(400)
+def bad_request(error):
+    """Handle 400 Bad Request errors"""
+    app.logger.warning(f"Bad request: {str(error)}")
+    return jsonify({
+        "success": False,
+        "error": "Bad request",
+        "message": str(error) if not os.getenv('FLASK_ENV') == 'production' else "Invalid request parameters"
+    }), 400
+
+
+@app.errorhandler(401)
+def unauthorized(error):
+    """Handle 401 Unauthorized errors"""
+    app.logger.warning(f"Unauthorized access attempt: {str(error)}")
+    return jsonify({
+        "success": False,
+        "error": "Unauthorized",
+        "message": "Authentication required"
+    }), 401
+
+
+@app.errorhandler(403)
+def forbidden(error):
+    """Handle 403 Forbidden errors"""
+    app.logger.warning(f"Forbidden access attempt: {str(error)}")
+    return jsonify({
+        "success": False,
+        "error": "Forbidden",
+        "message": "You don't have permission to access this resource"
+    }), 403
+
+
+@app.errorhandler(404)
+def not_found(error):
+    """Handle 404 Not Found errors"""
+    app.logger.debug(f"Resource not found: {request.path}")
+    return jsonify({
+        "success": False,
+        "error": "Not found",
+        "message": "The requested resource was not found"
+    }), 404
+
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    """Handle 405 Method Not Allowed errors"""
+    app.logger.warning(f"Method not allowed: {request.method} {request.path}")
+    return jsonify({
+        "success": False,
+        "error": "Method not allowed",
+        "message": f"The {request.method} method is not allowed for this endpoint"
+    }), 405
+
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    """Handle 413 Request Entity Too Large errors"""
+    app.logger.warning(f"Request too large: {request.path}")
+    return jsonify({
+        "success": False,
+        "error": "Request too large",
+        "message": "The request payload is too large"
+    }), 413
+
+
+@app.errorhandler(429)
+def too_many_requests(error):
+    """Handle 429 Too Many Requests (rate limiting) errors"""
+    app.logger.warning(f"Rate limit exceeded: {request.remote_addr} - {request.path}")
+    return jsonify({
+        "success": False,
+        "error": "Too many requests",
+        "message": "Rate limit exceeded. Please try again later."
+    }), 429
+
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    """Handle 500 Internal Server Error"""
+    app.logger.error(f"Internal server error: {str(error)}", exc_info=True)
+    
+    is_production = os.getenv('FLASK_ENV') == 'production'
+    return jsonify({
+        "success": False,
+        "error": "Internal server error",
+        "message": "An unexpected error occurred" if is_production else str(error)
+    }), 500
+
+
+@app.errorhandler(ValidationError)
+def validation_error(error):
+    """Handle Marshmallow validation errors"""
+    app.logger.warning(f"Validation error: {error.messages}")
+    return jsonify({
+        "success": False,
+        "error": "Validation failed",
+        "errors": error.messages
+    }), 400
+
+
+@app.errorhandler(Exception)
+def handle_exception(error):
+    """Handle all unhandled exceptions"""
+    app.logger.error(f"Unhandled exception: {type(error).__name__}: {str(error)}", exc_info=True)
+    
+    # If it's already a Flask error response, re-raise it
+    if hasattr(error, 'code'):
+        raise error
+    
+    is_production = os.getenv('FLASK_ENV') == 'production'
+    return jsonify({
+        "success": False,
+        "error": "Internal server error",
+        "message": "An unexpected error occurred" if is_production else str(error),
+        "type": type(error).__name__ if not is_production else None
+    }), 500
+
+
 def token_required(f):
     """Decorator to protect routes with JWT token"""
     @wraps(f)
@@ -273,12 +534,15 @@ def token_required(f):
 
 
 @app.route("/")
+@limiter.exempt  # Exempt health check from rate limiting
 def home():
     """Root endpoint to check if API is running"""
     return jsonify({"status": "ok", "message": "API is running"})
 
 
 @app.route('/api/mongodb/health', methods=['GET'])
+@token_required
+@limiter.limit("10 per minute")  # Health checks can be frequent but limit abuse
 def api_mongodb_health():
     """API endpoint to check MongoDB connection status"""
     try:
@@ -318,6 +582,8 @@ def api_mongodb_health():
         
         client.close()
         
+        logger.debug(f"MongoDB health check successful: {MONGO_HOST}:{MONGO_PORT}/{MONGO_DB_NAME} ({len(collections)} collections)")
+        
         return jsonify({
             "success": True,
             "connected": True,
@@ -330,27 +596,25 @@ def api_mongodb_health():
         }), 200
         
     except Exception as e:
+        # Don't expose MongoDB connection details in error
+        is_production = os.getenv('FLASK_ENV') == 'production'
+        error_msg = "MongoDB connection failed" if is_production else str(e)
         return jsonify({
             "success": False,
             "connected": False,
-            "error": str(e),
+            "error": error_msg,
             "message": "MongoDB connection failed"
         }), 500
 
 
 @app.route('/api/login', methods=['POST'])
-def api_login():
+@limiter.limit("5 per 15 minutes")  # Allow 5 login attempts per 15 minutes per IP
+@validate_json_body(LoginSchema)
+def api_login(validated_data):
     """API endpoint for user login - returns JWT token"""
     try:
-        data = request.get_json()
-        username = data.get('username')
-        password = data.get('password')
-        
-        if not username or not password:
-            return jsonify({
-                'success': False,
-                'error': 'Username and password are required'
-            }), 400
+        username = validated_data['username']
+        password = validated_data['password']
         
         # Verify credentials
         if username == ADMIN_USERNAME and check_password_hash(ADMIN_PASSWORD_HASH, password):
@@ -361,6 +625,8 @@ def api_login():
             }
             token = jwt.encode(token_payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
             
+            logger.debug(f"Successful login: {username} from {request.remote_addr}")
+            
             return jsonify({
                 'success': True,
                 'token': token,
@@ -368,16 +634,15 @@ def api_login():
                 'expires_in': JWT_EXPIRATION_HOURS * 3600  # seconds
             }), 200
         else:
+            logger.warning(f"Failed login attempt: {username} from {request.remote_addr}")
             return jsonify({
                 'success': False,
                 'error': 'Invalid username or password'
             }), 401
     
     except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        logger.error(f"Login error from {request.remote_addr}: {str(e)}", exc_info=True)
+        return safe_error_response(e, "Login failed. Please try again.")
 
 
 @app.route('/api/verify-token', methods=['GET'])
@@ -394,23 +659,18 @@ def api_verify_token():
 @token_required
 def api_status():
     """API endpoint to get scheduler status"""
+    logger.debug(f"Scheduler status requested by {request.remote_addr}")
     status = get_scheduler_status()
     return jsonify(status)
 
 
 @app.route('/api/data/<record_id>', methods=['DELETE'])
 @token_required
+@validate_path_param('record_id', ObjectId.is_valid, 'Invalid record ID')
 def api_delete_data(record_id):
     """API endpoint to delete a specific FII/DII record"""
     try:
         collector = NSEDataCollector()
-        
-        # Validate ObjectId
-        if not ObjectId.is_valid(record_id):
-            return jsonify({
-                "success": False,
-                "error": "Invalid record ID"
-            }), 400
         
         # Delete the record
         result = collector.collection.delete_one({"_id": ObjectId(record_id)})
@@ -436,35 +696,29 @@ def api_delete_data(record_id):
 
 @app.route('/api/data')
 @token_required
-def api_data():
+@validate_query_params(CombinedPaginationDateSchema)
+def api_data(validated_data):
     """API endpoint to get collected data with pagination and date filtering"""
     try:
         collector = NSEDataCollector()
         
-        # Get pagination parameters
-        page, limit = get_pagination_params()
+        # Get validated pagination parameters
+        page = validated_data.get('page', 1)
+        limit = validated_data.get('limit', 15)
         
-        # Get date filter parameters
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
+        # Get validated date filter parameters (already validated as strings in YYYY-MM-DD format)
+        start_date = validated_data.get('start_date')
+        end_date = validated_data.get('end_date')
         
         # Build query filter
         query_filter = {}
         if start_date:
-            try:
-                start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
-                query_filter["date"] = {"$gte": start_date}
-            except ValueError:
-                pass
+            query_filter["date"] = {"$gte": start_date}
         if end_date:
-            try:
-                end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
-                if "date" in query_filter:
-                    query_filter["date"]["$lte"] = end_date
-                else:
-                    query_filter["date"] = {"$lte": end_date}
-            except ValueError:
-                pass
+            if "date" in query_filter:
+                query_filter["date"]["$lte"] = end_date
+            else:
+                query_filter["date"] = {"$lte": end_date}
         
         # Calculate skip
         skip = (page - 1) * limit
@@ -701,8 +955,8 @@ def get_option_chain_status():
         "last_status": "unknown"
     }
     
-    # Check if process is running
-    is_running, pid = check_scheduler_running('option_chain_scheduler.py')
+    # Check if process is running (now using unified scheduler)
+    is_running, pid = check_scheduler_running('all_indices_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -713,13 +967,17 @@ def get_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(OPTION_CHAIN_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_INDICES_STATUS_FILE):
         try:
-            with open(OPTION_CHAIN_STATUS_FILE, 'r') as f:
+            with open(ALL_INDICES_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract NIFTY specific result if available
+                if "results" in file_status and "NIFTY" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["NIFTY"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -741,8 +999,8 @@ def api_option_chain_status():
 def api_option_chain_expiry():
     """API endpoint to get current NIFTY expiry date"""
     try:
-        collector = NSEOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllIndicesOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("NIFTY")
         collector.close()
         
         if expiry:
@@ -771,7 +1029,13 @@ def api_option_chain_expiry():
 def api_option_chain_data():
     """API endpoint to get collected option chain data with pagination and date filtering"""
     try:
-        collector = NSEOptionChainCollector()
+        collector, collection = get_index_collection("NIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for NIFTY"
+            }), 404
         
         # Get pagination parameters
         page, limit = get_pagination_params()
@@ -794,10 +1058,10 @@ def api_option_chain_data():
         skip = (page - 1) * limit
         
         # Get total count with filter
-        total_count = collector.collection.count_documents(query_filter)
+        total_count = collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -840,12 +1104,18 @@ def api_option_chain_data():
 def api_option_chain_stats():
     """API endpoint to get option chain statistics"""
     try:
-        collector = NSEOptionChainCollector()
+        collector, collection = get_index_collection("NIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for NIFTY"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest = collection.find_one(sort=[("records.timestamp", -1)])
         
         latest_timestamp = None
         latest_underlying = None
@@ -876,18 +1146,14 @@ def api_option_chain_stats():
 def api_option_chain_trigger():
     """API endpoint to manually trigger option chain data collection"""
     try:
-        collector = NSEOptionChainCollector()
-        success = collector.collect_and_save()
+        collector = NSEAllIndicesOptionChainCollector()
+        # Collect data for NIFTY only
+        nifty_index = next((i for i in INDICES if i["symbol"] == "NIFTY"), None)
+        if nifty_index:
+            success = collector.collect_and_save_single_index(nifty_index)
+        else:
+            success = False
         collector.close()
-        
-        # Update status file
-        status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
-            "last_status": "success" if success else "failed",
-            "manual_trigger": True
-        }
-        with open(OPTION_CHAIN_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
         
         return jsonify({
             "success": success,
@@ -905,7 +1171,13 @@ def api_option_chain_trigger():
 def api_option_chain_data_by_id(record_id):
     """API endpoint to get or delete a specific option chain record"""
     try:
-        collector = NSEOptionChainCollector()
+        collector, collection = get_index_collection("NIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for NIFTY"
+            }), 404
         
         # Validate ObjectId
         if not ObjectId.is_valid(record_id):
@@ -916,7 +1188,7 @@ def api_option_chain_data_by_id(record_id):
         
         if request.method == 'GET':
             # Get the full record
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -941,7 +1213,7 @@ def api_option_chain_data_by_id(record_id):
         
         elif request.method == 'DELETE':
             # Delete the record
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -979,7 +1251,7 @@ def get_banknifty_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('banknifty_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_indices_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -990,13 +1262,17 @@ def get_banknifty_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(BANKNIFTY_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_INDICES_STATUS_FILE):
         try:
-            with open(BANKNIFTY_STATUS_FILE, 'r') as f:
+            with open(ALL_INDICES_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract BANKNIFTY specific result if available
+                if "results" in file_status and "BANKNIFTY" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["BANKNIFTY"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -1018,7 +1294,13 @@ def api_banknifty_status():
 def api_banknifty_data():
     """API endpoint to get collected BankNifty option chain data with pagination and date filtering"""
     try:
-        collector = NSEBankNiftyOptionChainCollector()
+        collector, collection = get_index_collection("BANKNIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for BANKNIFTY"
+            }), 404
         
         # Get pagination parameters
         page, limit = get_pagination_params()
@@ -1041,10 +1323,10 @@ def api_banknifty_data():
         skip = (page - 1) * limit
         
         # Get total count with filter
-        total_count = collector.collection.count_documents(query_filter)
+        total_count = collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1087,8 +1369,8 @@ def api_banknifty_data():
 def api_banknifty_expiry():
     """API endpoint to get current BankNifty expiry date"""
     try:
-        collector = NSEBankNiftyOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllIndicesOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("BANKNIFTY")
         collector.close()
         
         if expiry:
@@ -1117,12 +1399,18 @@ def api_banknifty_expiry():
 def api_banknifty_stats():
     """API endpoint to get BankNifty option chain statistics"""
     try:
-        collector = NSEBankNiftyOptionChainCollector()
+        collector, collection = get_index_collection("BANKNIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for BANKNIFTY"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest = collection.find_one(sort=[("records.timestamp", -1)])
         
         latest_timestamp = None
         latest_underlying = None
@@ -1153,18 +1441,14 @@ def api_banknifty_stats():
 def api_banknifty_trigger():
     """API endpoint to manually trigger BankNifty option chain data collection"""
     try:
-        collector = NSEBankNiftyOptionChainCollector()
-        success = collector.collect_and_save()
+        collector = NSEAllIndicesOptionChainCollector()
+        # Collect data for BANKNIFTY only
+        banknifty_index = next((i for i in INDICES if i["symbol"] == "BANKNIFTY"), None)
+        if banknifty_index:
+            success = collector.collect_and_save_single_index(banknifty_index)
+        else:
+            success = False
         collector.close()
-        
-        # Update status file
-        status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
-            "last_status": "success" if success else "failed",
-            "manual_trigger": True
-        }
-        with open(BANKNIFTY_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
         
         return jsonify({
             "success": success,
@@ -1182,35 +1466,43 @@ def api_banknifty_trigger():
 def api_get_banknifty_data(record_id):
     """API endpoint to get a specific BankNifty option chain record with full data"""
     try:
-        collector = NSEBankNiftyOptionChainCollector()
+        collector, collection = get_index_collection("BANKNIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for BANKNIFTY"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
-        record = collector.collection.find_one({"_id": ObjectId(record_id)})
-        collector.close()
-        
-        if not record:
+        if request.method == 'GET':
+            record = collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "records": record.get("records", {}),
+                "filtered": record.get("filtered", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
             return jsonify({
-                "success": False,
-                "error": "Record not found"
-            }), 404
-        
-        record_dict = {
-            "_id": str(record.get("_id")),
-            "records": record.get("records", {}),
-            "filtered": record.get("filtered", {}),
-            "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-            "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
-        }
-        
-        return jsonify({
-            "success": True,
-            "data": record_dict
-        })
+                "success": True,
+                "data": record_dict
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -1223,27 +1515,35 @@ def api_get_banknifty_data(record_id):
 def api_delete_banknifty_data(record_id):
     """API endpoint to delete a specific BankNifty option chain record"""
     try:
-        collector = NSEBankNiftyOptionChainCollector()
+        collector, collection = get_index_collection("BANKNIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for BANKNIFTY"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
-        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
-        collector.close()
-        
-        if result.deleted_count == 0:
+        elif request.method == 'DELETE':
+            result = collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
             return jsonify({
-                "success": False,
-                "error": "Record not found"
-            }), 404
-        
-        return jsonify({
-            "success": True,
-            "message": "Record deleted successfully"
-        })
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -1269,7 +1569,7 @@ def get_finnifty_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('finnifty_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_indices_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -1280,13 +1580,17 @@ def get_finnifty_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(FINNIFTY_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_INDICES_STATUS_FILE):
         try:
-            with open(FINNIFTY_STATUS_FILE, 'r') as f:
+            with open(ALL_INDICES_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract FINNIFTY specific result if available
+                if "results" in file_status and "FINNIFTY" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["FINNIFTY"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -1309,7 +1613,13 @@ def api_finnifty_status():
 def api_finnifty_data():
     """API endpoint to get collected Finnifty option chain data with pagination and date filtering"""
     try:
-        collector = NSEFinniftyOptionChainCollector()
+        collector, collection = get_index_collection("FINNIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for FINNIFTY"
+            }), 404
         
         # Get pagination parameters
         page, limit = get_pagination_params()
@@ -1332,10 +1642,10 @@ def api_finnifty_data():
         skip = (page - 1) * limit
         
         # Get total count with filter
-        total_count = collector.collection.count_documents(query_filter)
+        total_count = collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1378,8 +1688,8 @@ def api_finnifty_data():
 def api_finnifty_expiry():
     """API endpoint to get current Finnifty expiry date"""
     try:
-        collector = NSEFinniftyOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllIndicesOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("FINNIFTY")
         collector.close()
         
         if expiry:
@@ -1408,12 +1718,18 @@ def api_finnifty_expiry():
 def api_finnifty_stats():
     """API endpoint to get Finnifty option chain statistics"""
     try:
-        collector = NSEFinniftyOptionChainCollector()
+        collector, collection = get_index_collection("FINNIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for FINNIFTY"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest = collection.find_one(sort=[("records.timestamp", -1)])
         
         latest_timestamp = None
         latest_underlying = None
@@ -1444,18 +1760,14 @@ def api_finnifty_stats():
 def api_finnifty_trigger():
     """API endpoint to manually trigger Finnifty option chain data collection"""
     try:
-        collector = NSEFinniftyOptionChainCollector()
-        success = collector.collect_and_save()
+        collector = NSEAllIndicesOptionChainCollector()
+        # Collect data for FINNIFTY only
+        finnifty_index = next((i for i in INDICES if i["symbol"] == "FINNIFTY"), None)
+        if finnifty_index:
+            success = collector.collect_and_save_single_index(finnifty_index)
+        else:
+            success = False
         collector.close()
-        
-        # Update status file
-        status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
-            "last_status": "success" if success else "failed",
-            "manual_trigger": True
-        }
-        with open(FINNIFTY_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
         
         return jsonify({
             "success": success,
@@ -1473,16 +1785,24 @@ def api_finnifty_trigger():
 def api_finnifty_data_by_id(record_id):
     """API endpoint to get or delete a specific Finnifty option chain record"""
     try:
-        collector = NSEFinniftyOptionChainCollector()
+        collector, collection = get_index_collection("FINNIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for FINNIFTY"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -1491,6 +1811,7 @@ def api_finnifty_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -1505,7 +1826,7 @@ def api_finnifty_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -1543,7 +1864,7 @@ def get_midcpnifty_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('midcpnifty_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_indices_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -1554,13 +1875,17 @@ def get_midcpnifty_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(MIDCPNIFTY_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_INDICES_STATUS_FILE):
         try:
-            with open(MIDCPNIFTY_STATUS_FILE, 'r') as f:
+            with open(ALL_INDICES_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract MIDCPNIFTY specific result if available
+                if "results" in file_status and "MIDCPNIFTY" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["MIDCPNIFTY"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -1601,13 +1926,19 @@ def api_midcpnifty_data():
         
         skip = (page - 1) * limit
         
-        collector = NSEMidcapNiftyOptionChainCollector()
+        collector, collection = get_index_collection("MIDCPNIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for MIDCPNIFTY"
+            }), 404
         
         # Get total count with filter
-        total_count = collector.collection.count_documents(query_filter)
+        total_count = collection.count_documents(query_filter)
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1658,8 +1989,8 @@ def api_midcpnifty_data():
 def api_midcpnifty_expiry():
     """API endpoint to get current MidcapNifty expiry date"""
     try:
-        collector = NSEMidcapNiftyOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllIndicesOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("MIDCPNIFTY")
         collector.close()
         
         if expiry:
@@ -1688,12 +2019,18 @@ def api_midcpnifty_expiry():
 def api_midcpnifty_stats():
     """API endpoint to get MidcapNifty option chain statistics"""
     try:
-        collector = NSEMidcapNiftyOptionChainCollector()
+        collector, collection = get_index_collection("MIDCPNIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for MIDCPNIFTY"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest = collection.find_one(sort=[("records.timestamp", -1)])
         
         latest_timestamp = None
         latest_underlying = None
@@ -1726,18 +2063,14 @@ def api_midcpnifty_stats():
 def api_midcpnifty_trigger():
     """API endpoint to manually trigger MidcapNifty option chain data collection"""
     try:
-        collector = NSEMidcapNiftyOptionChainCollector()
-        success = collector.collect_and_save()
+        collector = NSEAllIndicesOptionChainCollector()
+        # Collect data for MIDCPNIFTY only
+        midcpnifty_index = next((i for i in INDICES if i["symbol"] == "MIDCPNIFTY"), None)
+        if midcpnifty_index:
+            success = collector.collect_and_save_single_index(midcpnifty_index)
+        else:
+            success = False
         collector.close()
-        
-        # Update status file
-        status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
-            "last_status": "success" if success else "failed",
-            "manual_trigger": True
-        }
-        with open(MIDCPNIFTY_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
         
         return jsonify({
             "success": success,
@@ -1755,16 +2088,24 @@ def api_midcpnifty_trigger():
 def api_midcpnifty_data_by_id(record_id):
     """API endpoint to get or delete a specific MidcapNifty option chain record"""
     try:
-        collector = NSEMidcapNiftyOptionChainCollector()
+        collector, collection = get_index_collection("MIDCPNIFTY")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for MIDCPNIFTY"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -1773,6 +2114,7 @@ def api_midcpnifty_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -1787,7 +2129,7 @@ def api_midcpnifty_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -1809,13 +2151,13 @@ def api_midcpnifty_data_by_id(record_id):
 
 # HDFC Bank Option Chain Endpoints
 
-def get_hdfcbank_option_chain_next_run_time():
-    """Calculate next scheduled run time for HDFC Bank option chain using config"""
+def get_all_banks_option_chain_next_run_time():
+    """Calculate next scheduled run time for All Banks option chain using config"""
     return get_interval_scheduler_next_run_time("banks")
 
 
-def get_hdfcbank_option_chain_status():
-    """Get HDFC Bank option chain scheduler status from file or calculate"""
+def get_all_banks_option_chain_status():
+    """Get All Banks option chain scheduler status from file or calculate"""
     status = {
         "running": False,
         "pid": None,
@@ -1825,24 +2167,30 @@ def get_hdfcbank_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('hdfcbank_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
     # Get next run time
     try:
-        next_run = get_hdfcbank_option_chain_next_run_time()
+        next_run = get_all_banks_option_chain_next_run_time()
         status["next_run"] = next_run.isoformat() if next_run else None
     except Exception as e:
         status["next_run"] = None
     
     # Try to read status file
-    if os.path.exists(HDFCBANK_STATUS_FILE):
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(HDFCBANK_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
                 status["last_status"] = file_status.get("last_status", "unknown")
+                # Include bank-level results if available
+                if "results" in file_status:
+                    status["bank_results"] = file_status.get("results", {})
+                    status["successful"] = file_status.get("successful", 0)
+                    status["failed"] = file_status.get("failed", 0)
+                    status["total"] = file_status.get("total", len(BANKS))
         except Exception as e:
             pass
     
@@ -1853,10 +2201,60 @@ def get_hdfcbank_option_chain_status():
     return status
 
 
+@app.route('/api/all-banks/status')
+def api_all_banks_status():
+    """API endpoint to get All Banks option chain scheduler status"""
+    status = get_all_banks_option_chain_status()
+    return jsonify(status)
+
+
+# Helper function to get collection for a specific bank
+def get_bank_collection(symbol: str):
+    """Get MongoDB collection for a specific bank symbol"""
+    collector = NSEAllBanksOptionChainCollector()
+    collection = collector.get_collection(symbol)
+    return collector, collection
+
+
+# Helper function to get collection for a specific index
+def get_index_collection(symbol: str):
+    """Get MongoDB collection for a specific index symbol"""
+    collector = NSEAllIndicesOptionChainCollector()
+    collection = collector.get_collection(symbol)
+    return collector, collection
+
+
+# Helper function to get bank symbol from endpoint path
+def get_bank_symbol_from_path(path: str) -> str:
+    """Extract bank symbol from API path (e.g., /api/hdfcbank/data -> HDFCBANK)"""
+    bank_mappings = {
+        'hdfcbank': 'HDFCBANK',
+        'icicibank': 'ICICIBANK',
+        'sbin': 'SBIN',
+        'kotakbank': 'KOTAKBANK',
+        'axisbank': 'AXISBANK',
+        'bankbaroda': 'BANKBARODA',
+        'pnb': 'PNB',
+        'canbk': 'CANBK',
+        'aubank': 'AUBANK',
+        'indusindbk': 'INDUSINDBK',
+        'idfcfirstb': 'IDFCFIRSTB',
+        'federalbnk': 'FEDERALBNK'
+    }
+    for key, symbol in bank_mappings.items():
+        if key in path.lower():
+            return symbol
+    return None
+
+
 @app.route('/api/hdfcbank/status')
 def api_hdfcbank_status():
-    """API endpoint to get HDFC Bank option chain scheduler status"""
-    status = get_hdfcbank_option_chain_status()
+    """API endpoint to get HDFC Bank option chain scheduler status (deprecated - use /api/all-banks/status)"""
+    # Return status from unified scheduler
+    status = get_all_banks_option_chain_status()
+    # Extract HDFCBANK specific result if available
+    if "bank_results" in status and "HDFCBANK" in status["bank_results"]:
+        status["last_status"] = "success" if status["bank_results"]["HDFCBANK"] else "failed"
     return jsonify(status)
 
 
@@ -1868,13 +2266,19 @@ def api_hdfcbank_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSEHDFCBankOptionChainCollector()
+        collector, collection = get_bank_collection("HDFCBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for HDFCBANK"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1920,8 +2324,9 @@ def api_hdfcbank_data():
 def api_hdfcbank_expiry():
     """API endpoint to get current HDFC Bank expiry date"""
     try:
-        collector = NSEHDFCBankOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        # Get expiry for HDFCBANK
+        expiry = collector._fetch_expiry_dates_with_retry("HDFCBANK")
         collector.close()
         
         if expiry:
@@ -1950,12 +2355,18 @@ def api_hdfcbank_expiry():
 def api_hdfcbank_stats():
     """API endpoint to get HDFC Bank option chain statistics"""
     try:
-        collector = NSEHDFCBankOptionChainCollector()
+        collector, collection = get_bank_collection("HDFCBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for HDFCBANK"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -1987,18 +2398,14 @@ def api_hdfcbank_stats():
 def api_hdfcbank_trigger():
     """API endpoint to manually trigger HDFC Bank option chain data collection"""
     try:
-        collector = NSEHDFCBankOptionChainCollector()
-        success = collector.collect_and_save()
+        collector = NSEAllBanksOptionChainCollector()
+        # Collect data for HDFCBANK only
+        hdfc_bank = next((b for b in BANKS if b["symbol"] == "HDFCBANK"), None)
+        if hdfc_bank:
+            success = collector.collect_and_save_single_bank(hdfc_bank)
+        else:
+            success = False
         collector.close()
-        
-        # Update status file
-        status_data = {
-            "last_run": datetime.now(timezone.utc).isoformat(),
-            "last_status": "success" if success else "failed",
-            "manual_trigger": True
-        }
-        with open(HDFCBANK_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
         
         return jsonify({
             "success": success,
@@ -2016,16 +2423,24 @@ def api_hdfcbank_trigger():
 def api_hdfcbank_data_by_id(record_id):
     """API endpoint to get or delete a specific HDFC Bank option chain record"""
     try:
-        collector = NSEHDFCBankOptionChainCollector()
+        collector, collection = get_bank_collection("HDFCBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for HDFCBANK"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -2034,6 +2449,7 @@ def api_hdfcbank_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -2048,7 +2464,7 @@ def api_hdfcbank_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -2085,8 +2501,8 @@ def get_icicibank_option_chain_status():
         "last_status": "unknown"
     }
     
-    # Check if process is running
-    is_running, pid = check_scheduler_running('icicibank_option_chain_scheduler.py')
+    # Check if process is running (now using unified scheduler)
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -2097,13 +2513,17 @@ def get_icicibank_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(ICICIBANK_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(ICICIBANK_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract ICICIBANK specific result if available
+                if "results" in file_status and "ICICIBANK" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["ICICIBANK"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -2129,13 +2549,19 @@ def api_icicibank_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSEICICIBankOptionChainCollector()
+        collector, collection = get_bank_collection("ICICIBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for ICICIBANK"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -2181,8 +2607,8 @@ def api_icicibank_data():
 def api_icicibank_expiry():
     """API endpoint to get current ICICI Bank expiry date"""
     try:
-        collector = NSEICICIBankOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("ICICIBANK")
         collector.close()
         
         if expiry:
@@ -2211,12 +2637,18 @@ def api_icicibank_expiry():
 def api_icicibank_stats():
     """API endpoint to get ICICI Bank option chain statistics"""
     try:
-        collector = NSEICICIBankOptionChainCollector()
+        collector, collection = get_bank_collection("ICICIBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for ICICIBANK"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -2248,7 +2680,13 @@ def api_icicibank_stats():
 def api_icicibank_trigger():
     """API endpoint to manually trigger ICICI Bank option chain data collection"""
     try:
-        collector = NSEICICIBankOptionChainCollector()
+        collector, collection = get_bank_collection("ICICIBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for ICICIBANK"
+            }), 404
         success = collector.collect_and_save()
         collector.close()
         
@@ -2258,8 +2696,7 @@ def api_icicibank_trigger():
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
-        with open(ICICIBANK_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
+        # Status is now managed by unified scheduler
         
         return jsonify({
             "success": success,
@@ -2277,16 +2714,24 @@ def api_icicibank_trigger():
 def api_icicibank_data_by_id(record_id):
     """API endpoint to get or delete a specific ICICI Bank option chain record"""
     try:
-        collector = NSEICICIBankOptionChainCollector()
+        collector, collection = get_bank_collection("ICICIBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for ICICIBANK"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -2295,6 +2740,7 @@ def api_icicibank_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -2309,7 +2755,7 @@ def api_icicibank_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -2347,7 +2793,7 @@ def get_sbin_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('sbin_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -2358,13 +2804,17 @@ def get_sbin_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(SBIN_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(SBIN_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract SBIN specific result if available
+                if "results" in file_status and "SBIN" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["SBIN"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -2390,13 +2840,19 @@ def api_sbin_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSESBINOptionChainCollector()
+        collector, collection = get_bank_collection("SBIN")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for SBIN"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -2442,8 +2898,8 @@ def api_sbin_data():
 def api_sbin_expiry():
     """API endpoint to get current SBIN expiry date"""
     try:
-        collector = NSESBINOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("SBIN")
         collector.close()
         
         if expiry:
@@ -2472,12 +2928,18 @@ def api_sbin_expiry():
 def api_sbin_stats():
     """API endpoint to get SBIN option chain statistics"""
     try:
-        collector = NSESBINOptionChainCollector()
+        collector, collection = get_bank_collection("SBIN")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for SBIN"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -2509,7 +2971,13 @@ def api_sbin_stats():
 def api_sbin_trigger():
     """API endpoint to manually trigger SBIN option chain data collection"""
     try:
-        collector = NSESBINOptionChainCollector()
+        collector, collection = get_bank_collection("SBIN")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for SBIN"
+            }), 404
         success = collector.collect_and_save()
         collector.close()
         
@@ -2519,8 +2987,7 @@ def api_sbin_trigger():
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
-        with open(SBIN_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
+        # Status is now managed by unified scheduler
         
         return jsonify({
             "success": success,
@@ -2538,16 +3005,24 @@ def api_sbin_trigger():
 def api_sbin_data_by_id(record_id):
     """API endpoint to get or delete a specific SBIN option chain record"""
     try:
-        collector = NSESBINOptionChainCollector()
+        collector, collection = get_bank_collection("SBIN")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for SBIN"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -2556,6 +3031,7 @@ def api_sbin_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -2570,7 +3046,7 @@ def api_sbin_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -2608,7 +3084,7 @@ def get_kotakbank_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('kotakbank_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -2619,13 +3095,17 @@ def get_kotakbank_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(KOTAKBANK_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(KOTAKBANK_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract KOTAKBANK specific result if available
+                if "results" in file_status and "KOTAKBANK" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["KOTAKBANK"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -2651,13 +3131,19 @@ def api_kotakbank_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSEKotakBankOptionChainCollector()
+        collector, collection = get_bank_collection("KOTAKBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for KOTAKBANK"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -2703,8 +3189,8 @@ def api_kotakbank_data():
 def api_kotakbank_expiry():
     """API endpoint to get current Kotak Bank expiry date"""
     try:
-        collector = NSEKotakBankOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("KOTAKBANK")
         collector.close()
         
         if expiry:
@@ -2733,12 +3219,18 @@ def api_kotakbank_expiry():
 def api_kotakbank_stats():
     """API endpoint to get Kotak Bank option chain statistics"""
     try:
-        collector = NSEKotakBankOptionChainCollector()
+        collector, collection = get_bank_collection("KOTAKBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for KOTAKBANK"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -2770,7 +3262,13 @@ def api_kotakbank_stats():
 def api_kotakbank_trigger():
     """API endpoint to manually trigger Kotak Bank option chain data collection"""
     try:
-        collector = NSEKotakBankOptionChainCollector()
+        collector, collection = get_bank_collection("KOTAKBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for KOTAKBANK"
+            }), 404
         success = collector.collect_and_save()
         collector.close()
         
@@ -2780,8 +3278,7 @@ def api_kotakbank_trigger():
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
-        with open(KOTAKBANK_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
+        # Status is now managed by unified scheduler
         
         return jsonify({
             "success": success,
@@ -2799,16 +3296,24 @@ def api_kotakbank_trigger():
 def api_kotakbank_data_by_id(record_id):
     """API endpoint to get or delete a specific Kotak Bank option chain record"""
     try:
-        collector = NSEKotakBankOptionChainCollector()
+        collector, collection = get_bank_collection("KOTAKBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for KOTAKBANK"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -2817,6 +3322,7 @@ def api_kotakbank_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -2831,7 +3337,7 @@ def api_kotakbank_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -2869,7 +3375,7 @@ def get_axisbank_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('axisbank_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -2880,13 +3386,17 @@ def get_axisbank_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(AXISBANK_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(AXISBANK_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract AXISBANK specific result if available
+                if "results" in file_status and "AXISBANK" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["AXISBANK"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -2912,13 +3422,19 @@ def api_axisbank_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSEAxisBankOptionChainCollector()
+        collector, collection = get_bank_collection("AXISBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for AXISBANK"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -2964,8 +3480,8 @@ def api_axisbank_data():
 def api_axisbank_expiry():
     """API endpoint to get current Axis Bank expiry date"""
     try:
-        collector = NSEAxisBankOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("AXISBANK")
         collector.close()
         
         if expiry:
@@ -2994,12 +3510,18 @@ def api_axisbank_expiry():
 def api_axisbank_stats():
     """API endpoint to get Axis Bank option chain statistics"""
     try:
-        collector = NSEAxisBankOptionChainCollector()
+        collector, collection = get_bank_collection("AXISBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for AXISBANK"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -3031,7 +3553,13 @@ def api_axisbank_stats():
 def api_axisbank_trigger():
     """API endpoint to manually trigger Axis Bank option chain data collection"""
     try:
-        collector = NSEAxisBankOptionChainCollector()
+        collector, collection = get_bank_collection("AXISBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for AXISBANK"
+            }), 404
         success = collector.collect_and_save()
         collector.close()
         
@@ -3041,8 +3569,7 @@ def api_axisbank_trigger():
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
-        with open(AXISBANK_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
+        # Status is now managed by unified scheduler
         
         return jsonify({
             "success": success,
@@ -3060,16 +3587,24 @@ def api_axisbank_trigger():
 def api_axisbank_data_by_id(record_id):
     """API endpoint to get or delete a specific Axis Bank option chain record"""
     try:
-        collector = NSEAxisBankOptionChainCollector()
+        collector, collection = get_bank_collection("AXISBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for AXISBANK"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -3078,6 +3613,7 @@ def api_axisbank_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -3092,7 +3628,7 @@ def api_axisbank_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -3130,7 +3666,7 @@ def get_bankbaroda_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('bankbaroda_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -3141,13 +3677,17 @@ def get_bankbaroda_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(BANKBARODA_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(BANKBARODA_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract BANKBARODA specific result if available
+                if "results" in file_status and "BANKBARODA" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["BANKBARODA"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -3173,13 +3713,19 @@ def api_bankbaroda_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSEBankBarodaOptionChainCollector()
+        collector, collection = get_bank_collection("BANKBARODA")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for BANKBARODA"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -3225,8 +3771,8 @@ def api_bankbaroda_data():
 def api_bankbaroda_expiry():
     """API endpoint to get current Bank of Baroda expiry date"""
     try:
-        collector = NSEBankBarodaOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("BANKBARODA")
         collector.close()
         
         if expiry:
@@ -3255,12 +3801,18 @@ def api_bankbaroda_expiry():
 def api_bankbaroda_stats():
     """API endpoint to get Bank of Baroda option chain statistics"""
     try:
-        collector = NSEBankBarodaOptionChainCollector()
+        collector, collection = get_bank_collection("BANKBARODA")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for BANKBARODA"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -3292,7 +3844,13 @@ def api_bankbaroda_stats():
 def api_bankbaroda_trigger():
     """API endpoint to manually trigger Bank of Baroda option chain data collection"""
     try:
-        collector = NSEBankBarodaOptionChainCollector()
+        collector, collection = get_bank_collection("BANKBARODA")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for BANKBARODA"
+            }), 404
         success = collector.collect_and_save()
         collector.close()
         
@@ -3302,8 +3860,7 @@ def api_bankbaroda_trigger():
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
-        with open(BANKBARODA_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
+        # Status is now managed by unified scheduler
         
         return jsonify({
             "success": success,
@@ -3321,16 +3878,24 @@ def api_bankbaroda_trigger():
 def api_bankbaroda_data_by_id(record_id):
     """API endpoint to get or delete a specific Bank of Baroda option chain record"""
     try:
-        collector = NSEBankBarodaOptionChainCollector()
+        collector, collection = get_bank_collection("BANKBARODA")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for BANKBARODA"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -3339,6 +3904,7 @@ def api_bankbaroda_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -3353,7 +3919,7 @@ def api_bankbaroda_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -3391,7 +3957,7 @@ def get_pnb_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('pnb_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -3402,13 +3968,17 @@ def get_pnb_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(PNB_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(PNB_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract PNB specific result if available
+                if "results" in file_status and "PNB" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["PNB"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -3434,13 +4004,19 @@ def api_pnb_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSEPNBOptionChainCollector()
+        collector, collection = get_bank_collection("PNB")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for PNB"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -3486,8 +4062,8 @@ def api_pnb_data():
 def api_pnb_expiry():
     """API endpoint to get current PNB expiry date"""
     try:
-        collector = NSEPNBOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("PNB")
         collector.close()
         
         if expiry:
@@ -3516,12 +4092,18 @@ def api_pnb_expiry():
 def api_pnb_stats():
     """API endpoint to get PNB option chain statistics"""
     try:
-        collector = NSEPNBOptionChainCollector()
+        collector, collection = get_bank_collection("PNB")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for PNB"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -3553,7 +4135,13 @@ def api_pnb_stats():
 def api_pnb_trigger():
     """API endpoint to manually trigger PNB option chain data collection"""
     try:
-        collector = NSEPNBOptionChainCollector()
+        collector, collection = get_bank_collection("PNB")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for PNB"
+            }), 404
         success = collector.collect_and_save()
         collector.close()
         
@@ -3563,8 +4151,7 @@ def api_pnb_trigger():
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
-        with open(PNB_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
+        # Status is now managed by unified scheduler
         
         return jsonify({
             "success": success,
@@ -3582,16 +4169,24 @@ def api_pnb_trigger():
 def api_pnb_data_by_id(record_id):
     """API endpoint to get or delete a specific PNB option chain record"""
     try:
-        collector = NSEPNBOptionChainCollector()
+        collector, collection = get_bank_collection("PNB")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for PNB"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -3600,6 +4195,7 @@ def api_pnb_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -3614,7 +4210,7 @@ def api_pnb_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -3652,7 +4248,7 @@ def get_canbk_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('canbk_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -3663,13 +4259,17 @@ def get_canbk_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(CANBK_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(CANBK_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract CANBK specific result if available
+                if "results" in file_status and "CANBK" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["CANBK"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -3695,13 +4295,19 @@ def api_canbk_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSECANBKOptionChainCollector()
+        collector, collection = get_bank_collection("CANBK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for CANBK"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -3747,8 +4353,8 @@ def api_canbk_data():
 def api_canbk_expiry():
     """API endpoint to get current CANBK expiry date"""
     try:
-        collector = NSECANBKOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("CANBK")
         collector.close()
         
         if expiry:
@@ -3777,12 +4383,18 @@ def api_canbk_expiry():
 def api_canbk_stats():
     """API endpoint to get CANBK option chain statistics"""
     try:
-        collector = NSECANBKOptionChainCollector()
+        collector, collection = get_bank_collection("CANBK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for CANBK"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -3814,7 +4426,13 @@ def api_canbk_stats():
 def api_canbk_trigger():
     """API endpoint to manually trigger CANBK option chain data collection"""
     try:
-        collector = NSECANBKOptionChainCollector()
+        collector, collection = get_bank_collection("CANBK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for CANBK"
+            }), 404
         success = collector.collect_and_save()
         collector.close()
         
@@ -3824,8 +4442,7 @@ def api_canbk_trigger():
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
-        with open(CANBK_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
+        # Status is now managed by unified scheduler
         
         return jsonify({
             "success": success,
@@ -3843,16 +4460,24 @@ def api_canbk_trigger():
 def api_canbk_data_by_id(record_id):
     """API endpoint to get or delete a specific CANBK option chain record"""
     try:
-        collector = NSECANBKOptionChainCollector()
+        collector, collection = get_bank_collection("CANBK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for CANBK"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -3861,6 +4486,7 @@ def api_canbk_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -3875,7 +4501,7 @@ def api_canbk_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -3913,7 +4539,7 @@ def get_aubank_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('aubank_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -3924,13 +4550,17 @@ def get_aubank_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(AUBANK_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(AUBANK_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract AUBANK specific result if available
+                if "results" in file_status and "AUBANK" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["AUBANK"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -3956,13 +4586,19 @@ def api_aubank_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSEAUBANKOptionChainCollector()
+        collector, collection = get_bank_collection("AUBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for AUBANK"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4008,8 +4644,8 @@ def api_aubank_data():
 def api_aubank_expiry():
     """API endpoint to get current AUBANK expiry date"""
     try:
-        collector = NSEAUBANKOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("AUBANK")
         collector.close()
         
         if expiry:
@@ -4038,12 +4674,18 @@ def api_aubank_expiry():
 def api_aubank_stats():
     """API endpoint to get AUBANK option chain statistics"""
     try:
-        collector = NSEAUBANKOptionChainCollector()
+        collector, collection = get_bank_collection("AUBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for AUBANK"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -4075,7 +4717,13 @@ def api_aubank_stats():
 def api_aubank_trigger():
     """API endpoint to manually trigger AUBANK option chain data collection"""
     try:
-        collector = NSEAUBANKOptionChainCollector()
+        collector, collection = get_bank_collection("AUBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for AUBANK"
+            }), 404
         success = collector.collect_and_save()
         collector.close()
         
@@ -4085,8 +4733,7 @@ def api_aubank_trigger():
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
-        with open(AUBANK_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
+        # Status is now managed by unified scheduler
         
         return jsonify({
             "success": success,
@@ -4104,16 +4751,24 @@ def api_aubank_trigger():
 def api_aubank_data_by_id(record_id):
     """API endpoint to get or delete a specific AUBANK option chain record"""
     try:
-        collector = NSEAUBANKOptionChainCollector()
+        collector, collection = get_bank_collection("AUBANK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for AUBANK"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -4122,6 +4777,7 @@ def api_aubank_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -4136,7 +4792,7 @@ def api_aubank_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -4174,7 +4830,7 @@ def get_indusindbk_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('indusindbk_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -4185,13 +4841,17 @@ def get_indusindbk_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(INDUSINDBK_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(INDUSINDBK_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract INDUSINDBK specific result if available
+                if "results" in file_status and "INDUSINDBK" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["INDUSINDBK"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -4217,13 +4877,19 @@ def api_indusindbk_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSEIndusIndBkOptionChainCollector()
+        collector, collection = get_bank_collection("INDUSINDBK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for INDUSINDBK"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4269,8 +4935,8 @@ def api_indusindbk_data():
 def api_indusindbk_expiry():
     """API endpoint to get current INDUSINDBK expiry date"""
     try:
-        collector = NSEIndusIndBkOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("INDUSINDBK")
         collector.close()
         
         if expiry:
@@ -4299,12 +4965,18 @@ def api_indusindbk_expiry():
 def api_indusindbk_stats():
     """API endpoint to get INDUSINDBK option chain statistics"""
     try:
-        collector = NSEIndusIndBkOptionChainCollector()
+        collector, collection = get_bank_collection("INDUSINDBK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for INDUSINDBK"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -4336,7 +5008,13 @@ def api_indusindbk_stats():
 def api_indusindbk_trigger():
     """API endpoint to manually trigger INDUSINDBK option chain data collection"""
     try:
-        collector = NSEIndusIndBkOptionChainCollector()
+        collector, collection = get_bank_collection("INDUSINDBK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for INDUSINDBK"
+            }), 404
         success = collector.collect_and_save()
         collector.close()
         
@@ -4346,8 +5024,7 @@ def api_indusindbk_trigger():
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
-        with open(INDUSINDBK_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
+        # Status is now managed by unified scheduler
         
         return jsonify({
             "success": success,
@@ -4365,16 +5042,24 @@ def api_indusindbk_trigger():
 def api_indusindbk_data_by_id(record_id):
     """API endpoint to get or delete a specific INDUSINDBK option chain record"""
     try:
-        collector = NSEIndusIndBkOptionChainCollector()
+        collector, collection = get_bank_collection("INDUSINDBK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for INDUSINDBK"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -4383,6 +5068,7 @@ def api_indusindbk_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -4397,7 +5083,7 @@ def api_indusindbk_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -4435,7 +5121,7 @@ def get_idfcfirstb_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('idfcfirstb_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -4446,13 +5132,17 @@ def get_idfcfirstb_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(IDFCFIRSTB_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(IDFCFIRSTB_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract IDFCFIRSTB specific result if available
+                if "results" in file_status and "IDFCFIRSTB" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["IDFCFIRSTB"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -4478,13 +5168,19 @@ def api_idfcfirstb_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSEIDFCFIRSTBOptionChainCollector()
+        collector, collection = get_bank_collection("IDFCFIRSTB")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for IDFCFIRSTB"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4530,8 +5226,8 @@ def api_idfcfirstb_data():
 def api_idfcfirstb_expiry():
     """API endpoint to get current IDFCFIRSTB expiry date"""
     try:
-        collector = NSEIDFCFIRSTBOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("IDFCFIRSTB")
         collector.close()
         
         if expiry:
@@ -4560,12 +5256,18 @@ def api_idfcfirstb_expiry():
 def api_idfcfirstb_stats():
     """API endpoint to get IDFCFIRSTB option chain statistics"""
     try:
-        collector = NSEIDFCFIRSTBOptionChainCollector()
+        collector, collection = get_bank_collection("IDFCFIRSTB")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for IDFCFIRSTB"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -4597,7 +5299,13 @@ def api_idfcfirstb_stats():
 def api_idfcfirstb_trigger():
     """API endpoint to manually trigger IDFCFIRSTB option chain data collection"""
     try:
-        collector = NSEIDFCFIRSTBOptionChainCollector()
+        collector, collection = get_bank_collection("IDFCFIRSTB")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for IDFCFIRSTB"
+            }), 404
         success = collector.collect_and_save()
         collector.close()
         
@@ -4607,8 +5315,7 @@ def api_idfcfirstb_trigger():
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
-        with open(IDFCFIRSTB_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
+        # Status is now managed by unified scheduler
         
         return jsonify({
             "success": success,
@@ -4626,16 +5333,24 @@ def api_idfcfirstb_trigger():
 def api_idfcfirstb_data_by_id(record_id):
     """API endpoint to get or delete a specific IDFCFIRSTB option chain record"""
     try:
-        collector = NSEIDFCFIRSTBOptionChainCollector()
+        collector, collection = get_bank_collection("IDFCFIRSTB")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for IDFCFIRSTB"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -4644,6 +5359,7 @@ def api_idfcfirstb_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -4658,7 +5374,7 @@ def api_idfcfirstb_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -4696,7 +5412,7 @@ def get_federalbnk_option_chain_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('federalbnk_option_chain_scheduler.py')
+    is_running, pid = check_scheduler_running('all_banks_option_chain_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
@@ -4707,13 +5423,17 @@ def get_federalbnk_option_chain_status():
     except Exception as e:
         status["next_run"] = None
     
-    # Try to read status file
-    if os.path.exists(FEDERALBNK_STATUS_FILE):
+    # Try to read unified status file
+    if os.path.exists(ALL_BANKS_STATUS_FILE):
         try:
-            with open(FEDERALBNK_STATUS_FILE, 'r') as f:
+            with open(ALL_BANKS_STATUS_FILE, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
+                # Extract FEDERALBNK specific result if available
+                if "results" in file_status and "FEDERALBNK" in file_status["results"]:
+                    status["last_status"] = "success" if file_status["results"]["FEDERALBNK"] else "failed"
+                else:
+                    status["last_status"] = file_status.get("last_status", "unknown")
         except Exception as e:
             pass
     
@@ -4739,13 +5459,19 @@ def api_federalbnk_data():
         page, limit = get_pagination_params()
         skip = (page - 1) * limit
         
-        collector = NSEFEDERALBNKOptionChainCollector()
+        collector, collection = get_bank_collection("FEDERALBNK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for FEDERALBNK"
+            }), 404
         
         # Get total count
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collector.collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4791,8 +5517,8 @@ def api_federalbnk_data():
 def api_federalbnk_expiry():
     """API endpoint to get current FEDERALBNK expiry date"""
     try:
-        collector = NSEFEDERALBNKOptionChainCollector()
-        expiry = collector.get_current_expiry()
+        collector = NSEAllBanksOptionChainCollector()
+        expiry = collector._fetch_expiry_dates_with_retry("FEDERALBNK")
         collector.close()
         
         if expiry:
@@ -4821,12 +5547,18 @@ def api_federalbnk_expiry():
 def api_federalbnk_stats():
     """API endpoint to get FEDERALBNK option chain statistics"""
     try:
-        collector = NSEFEDERALBNKOptionChainCollector()
+        collector, collection = get_bank_collection("FEDERALBNK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for FEDERALBNK"
+            }), 404
         
-        total_count = collector.collection.count_documents({})
+        total_count = collection.count_documents({})
         
         # Get latest record
-        latest_record = collector.collection.find_one(sort=[("records.timestamp", -1)])
+        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -4858,7 +5590,13 @@ def api_federalbnk_stats():
 def api_federalbnk_trigger():
     """API endpoint to manually trigger FEDERALBNK option chain data collection"""
     try:
-        collector = NSEFEDERALBNKOptionChainCollector()
+        collector, collection = get_bank_collection("FEDERALBNK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for FEDERALBNK"
+            }), 404
         success = collector.collect_and_save()
         collector.close()
         
@@ -4868,8 +5606,7 @@ def api_federalbnk_trigger():
             "last_status": "success" if success else "failed",
             "manual_trigger": True
         }
-        with open(FEDERALBNK_STATUS_FILE, 'w') as f:
-            json.dump(status_data, f)
+        # Status is now managed by unified scheduler
         
         return jsonify({
             "success": success,
@@ -4887,16 +5624,24 @@ def api_federalbnk_trigger():
 def api_federalbnk_data_by_id(record_id):
     """API endpoint to get or delete a specific FEDERALBNK option chain record"""
     try:
-        collector = NSEFEDERALBNKOptionChainCollector()
+        collector, collection = get_bank_collection("FEDERALBNK")
+        if collection is None:
+            collector.close()
+            return jsonify({
+                "success": False,
+                "error": "Collection not found for FEDERALBNK"
+            }), 404
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
         if request.method == 'GET':
-            record = collector.collection.find_one({"_id": ObjectId(record_id)})
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if not record:
@@ -4905,6 +5650,7 @@ def api_federalbnk_data_by_id(record_id):
                     "error": "Record not found"
                 }), 404
             
+            # Convert ObjectId to string and format dates
             record_dict = {
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
@@ -4919,7 +5665,7 @@ def api_federalbnk_data_by_id(record_id):
             })
         
         elif request.method == 'DELETE':
-            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            result = collection.delete_one({"_id": ObjectId(record_id)})
             collector.close()
             
             if result.deleted_count == 0:
@@ -5152,24 +5898,26 @@ def api_delete_gainers_data(record_id):
         collector = NSEGainersCollector()
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
-        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
-        collector.close()
-        
-        if result.deleted_count == 0:
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
             return jsonify({
-                "success": False,
-                "error": "Record not found"
-            }), 404
-        
-        return jsonify({
-            "success": True,
-            "message": "Record deleted successfully"
-        })
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -5390,24 +6138,26 @@ def api_delete_losers_data(record_id):
         collector = NSELosersCollector()
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
-        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
-        collector.close()
-        
-        if result.deleted_count == 0:
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
             return jsonify({
-                "success": False,
-                "error": "Record not found"
-            }), 404
-        
-        return jsonify({
-            "success": True,
-            "message": "Record deleted successfully"
-        })
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -5591,6 +6341,7 @@ def api_news_stats():
 def api_news_trigger():
     """API endpoint to manually trigger news collection"""
     try:
+        
         collector = NSENewsCollector()
         success = collector.collect_and_save()
         collector.close()
@@ -5623,24 +6374,26 @@ def api_delete_news_data(record_id):
         collector = NSENewsCollector()
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
-        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
-        collector.close()
-        
-        if result.deleted_count == 0:
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
             return jsonify({
-                "success": False,
-                "error": "Record not found"
-            }), 404
-        
-        return jsonify({
-            "success": True,
-            "message": "Record deleted successfully"
-        })
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -5853,24 +6606,26 @@ def api_delete_livemint_news_data(record_id):
         collector = NSELiveMintNewsCollector()
         
         if not ObjectId.is_valid(record_id):
+            collector.close()
             return jsonify({
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
         
-        result = collector.collection.delete_one({"_id": ObjectId(record_id)})
-        collector.close()
-        
-        if result.deleted_count == 0:
+        elif request.method == 'DELETE':
+            result = collector.collection.delete_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if result.deleted_count == 0:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
             return jsonify({
-                "success": False,
-                "error": "Record not found"
-            }), 404
-        
-        return jsonify({
-            "success": True,
-            "message": "Record deleted successfully"
-        })
+                "success": True,
+                "message": "Record deleted successfully"
+            })
     except Exception as e:
         return jsonify({
             "success": False,
@@ -5901,69 +6656,26 @@ def api_get_config():
 
 @app.route('/api/config', methods=['POST'])
 @token_required
-def api_update_config():
+@validate_json_body(SchedulerConfigSchema)
+def api_update_config(validated_data):
     """Update scheduler configuration"""
     try:
-        data = request.get_json()
-        scheduler_type = data.get('scheduler_type')  # 'banks', 'indices', etc.
-        config_updates = data.get('config', {})
+        scheduler_type = validated_data['scheduler_type']
+        config_updates = validated_data['config']
         
-        if not scheduler_type:
+        # Validate config updates using ConfigUpdateSchema
+        config_schema = ConfigUpdateSchema(context={'start_time': config_updates.get('start_time')})
+        try:
+            validated_config = config_schema.load(config_updates)
+        except ValidationError as err:
             return jsonify({
                 "success": False,
-                "error": "scheduler_type is required"
+                "error": "Invalid config values",
+                "errors": err.messages
             }), 400
         
-        # Validate scheduler type
-        valid_types = ['banks', 'indices', 'gainers_losers', 'news', 'fiidii']
-        if scheduler_type not in valid_types:
-            return jsonify({
-                "success": False,
-                "error": f"Invalid scheduler_type. Must be one of: {', '.join(valid_types)}"
-            }), 400
-        
-        # Validate config updates
-        if 'interval_minutes' in config_updates:
-            try:
-                interval = int(config_updates['interval_minutes'])
-                if interval < 1:
-                    return jsonify({
-                        "success": False,
-                        "error": "interval_minutes must be at least 1"
-                    }), 400
-            except ValueError:
-                return jsonify({
-                    "success": False,
-                    "error": "interval_minutes must be a number"
-                }), 400
-        
-        if 'start_time' in config_updates:
-            try:
-                datetime.strptime(config_updates['start_time'], "%H:%M")
-            except ValueError:
-                return jsonify({
-                    "success": False,
-                    "error": "start_time must be in HH:MM format"
-                }), 400
-        
-        if 'end_time' in config_updates:
-            try:
-                datetime.strptime(config_updates['end_time'], "%H:%M")
-            except ValueError:
-                return jsonify({
-                    "success": False,
-                    "error": "end_time must be in HH:MM format"
-                }), 400
-        
-        if 'enabled' in config_updates:
-            if not isinstance(config_updates['enabled'], bool):
-                return jsonify({
-                    "success": False,
-                    "error": "enabled must be a boolean"
-                }), 400
-        
-        # Update configuration
-        success = update_scheduler_config(scheduler_type, config_updates)
+        # Update configuration with validated data
+        success = update_scheduler_config(scheduler_type, validated_config)
         
         if success:
             return jsonify({
@@ -6002,26 +6714,11 @@ def api_get_holidays():
 
 @app.route('/api/holidays', methods=['POST'])
 @token_required
-def api_add_holiday():
+@validate_json_body(HolidaySchema)
+def api_add_holiday(validated_data):
     """Add a holiday"""
     try:
-        data = request.get_json()
-        holiday_date = data.get('date')
-        
-        if not holiday_date:
-            return jsonify({
-                "success": False,
-                "error": "date is required (format: YYYY-MM-DD)"
-            }), 400
-        
-        # Validate date format
-        try:
-            datetime.strptime(holiday_date, "%Y-%m-%d")
-        except ValueError:
-            return jsonify({
-                "success": False,
-                "error": "date must be in YYYY-MM-DD format"
-            }), 400
+        holiday_date = validated_data['date']
         
         success = add_holiday(holiday_date)
         
@@ -6045,17 +6742,11 @@ def api_add_holiday():
 
 @app.route('/api/holidays', methods=['DELETE'])
 @token_required
-def api_remove_holiday():
+@validate_json_body(HolidaySchema)
+def api_remove_holiday(validated_data):
     """Remove a holiday"""
     try:
-        data = request.get_json()
-        holiday_date = data.get('date')
-        
-        if not holiday_date:
-            return jsonify({
-                "success": False,
-                "error": "date is required (format: YYYY-MM-DD)"
-            }), 400
+        holiday_date = validated_data['date']
         
         success = remove_holiday(holiday_date)
         
@@ -6071,42 +6762,24 @@ def api_remove_holiday():
         }), 500
 
 
+# Global variable to track scheduler threads
+_scheduler_threads = []
+
 def start_all_schedulers_in_background():
     """Start all schedulers in background threads"""
-    import logging
+    global _scheduler_threads
     
-    # Configure logging for schedulers - Only show warnings and errors
-    logging.basicConfig(
-        level=logging.WARNING,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler()  # Console only - no log files
-        ]
-    )
-    logger = logging.getLogger(__name__)
+    # Use centralized logging configuration
+    logger = get_logger(__name__)
     
-    # ADMIN PANEL: Starting All Data Collectors in Background
-    # Started at: {datetime.now()}
+    logger.info("Starting All Data Collectors in Background")
+    logger.debug(f"Started at: {datetime.now()}")
     
     # List of all schedulers
     schedulers = [
         ('cronjob_scheduler', 'FII/DII Data Collector'),
-        ('option_chain_scheduler', 'NIFTY Option Chain Collector'),
-        ('banknifty_option_chain_scheduler', 'BankNifty Option Chain Collector'),
-        ('finnifty_option_chain_scheduler', 'Finnifty Option Chain Collector'),
-        ('midcpnifty_option_chain_scheduler', 'MidcapNifty Option Chain Collector'),
-        ('hdfcbank_option_chain_scheduler', 'HDFC Bank Option Chain Collector'),
-        ('icicibank_option_chain_scheduler', 'ICICI Bank Option Chain Collector'),
-        ('sbin_option_chain_scheduler', 'SBIN Option Chain Collector'),
-        ('kotakbank_option_chain_scheduler', 'Kotak Bank Option Chain Collector'),
-        ('axisbank_option_chain_scheduler', 'Axis Bank Option Chain Collector'),
-        ('bankbaroda_option_chain_scheduler', 'Bank of Baroda Option Chain Collector'),
-        ('pnb_option_chain_scheduler', 'PNB Option Chain Collector'),
-        ('canbk_option_chain_scheduler', 'CANBK Option Chain Collector'),
-        ('aubank_option_chain_scheduler', 'AUBANK Option Chain Collector'),
-        ('indusindbk_option_chain_scheduler', 'IndusInd Bank Option Chain Collector'),
-        ('idfcfirstb_option_chain_scheduler', 'IDFC First Bank Option Chain Collector'),
-        ('federalbnk_option_chain_scheduler', 'Federal Bank Option Chain Collector'),
+        ('all_indices_option_chain_scheduler', 'All Indices Option Chain Collector (4 indices)'),
+        ('all_banks_option_chain_scheduler', 'All Banks Option Chain Collector (12 banks)'),
         ('gainers_scheduler', 'Top 20 Gainers Collector'),
         ('losers_scheduler', 'Top 20 Losers Collector'),
         ('news_collector_scheduler', 'News Collector'),
@@ -6117,13 +6790,13 @@ def start_all_schedulers_in_background():
         """Run scheduler in a separate thread"""
         def scheduler_worker():
             try:
-                logger.info(f"Starting {scheduler_name}...")
+                logger.debug(f"Starting {scheduler_name}...")
                 # Import the scheduler module
                 scheduler_module = __import__(module_name, fromlist=[])
                 
                 # Check if module has a main function (most schedulers have this)
                 if hasattr(scheduler_module, 'main'):
-                    logger.info(f"{scheduler_name} imported successfully, calling main()...")
+                    logger.debug(f"{scheduler_name} imported successfully, calling main()...")
                     scheduler_module.main()
                 else:
                     logger.error(f"{scheduler_name} does not have a main() function")
@@ -6139,7 +6812,7 @@ def start_all_schedulers_in_background():
         
         thread = threading.Thread(target=scheduler_worker, daemon=True, name=scheduler_name)
         thread.start()
-        logger.info(f"Thread started for {scheduler_name} (daemon thread)")
+        logger.debug(f"Thread started for {scheduler_name} (daemon thread)")
         return thread
     
     threads = []
@@ -6150,21 +6823,123 @@ def start_all_schedulers_in_background():
         threads.append((thread, scheduler_name))
         time_module.sleep(0.5)  # Small delay between starting schedulers
     
-    # All {len(threads)} schedulers started successfully in background!
+    _scheduler_threads = threads
+    logger.info(f"All {len(threads)} schedulers started successfully in background")
     
     return threads
 
+
+@app.route('/api/schedulers/start', methods=['POST'])
+@token_required
+def api_start_schedulers():
+    """API endpoint to start all schedulers"""
+    try:
+        global _scheduler_threads
+        
+        # Check if schedulers are already running
+        alive_count = sum(1 for thread, name in _scheduler_threads if thread.is_alive()) if _scheduler_threads else 0
+        
+        if alive_count > 0:
+            return jsonify({
+                "success": True,
+                "message": f"Schedulers already running ({alive_count} active)",
+                "already_running": True
+            })
+        
+        # Start schedulers
+        threads = start_all_schedulers_in_background()
+        
+        return jsonify({
+            "success": True,
+            "message": f"All {len(threads)} schedulers started successfully",
+            "count": len(threads)
+        })
+    except Exception as e:
+        logger.error(f"Failed to start schedulers: {str(e)}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@app.route('/api/schedulers/status', methods=['GET'])
+@token_required
+def api_schedulers_status():
+    """API endpoint to get status of all scheduler threads"""
+    try:
+        global _scheduler_threads
+        
+        status_list = []
+        
+        if _scheduler_threads:
+            for thread, name in _scheduler_threads:
+                status_list.append({
+                    "name": name,
+                    "alive": thread.is_alive(),
+                    "daemon": thread.daemon,
+                    "thread_id": thread.ident
+                })
+        else:
+            # Schedulers not started yet
+            schedulers = [
+                'FII/DII Data Collector',
+                'All Indices Option Chain Collector (4 indices)',
+                'All Banks Option Chain Collector (12 banks)',
+                'Top 20 Gainers Collector',
+                'Top 20 Losers Collector',
+                'News Collector',
+                'LiveMint News Collector',
+            ]
+            for name in schedulers:
+                status_list.append({
+                    "name": name,
+                    "alive": False,
+                    "daemon": False,
+                    "thread_id": None
+                })
+        
+        alive_count = sum(1 for s in status_list if s["alive"])
+        total_count = len(status_list)
+        
+        return jsonify({
+            "success": True,
+            "total": total_count,
+            "alive": alive_count,
+            "stopped": total_count - alive_count,
+            "schedulers": status_list
+        })
+    except Exception as e:
+        logger.error(f"Failed to get scheduler status: {str(e)}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# Auto-start schedulers when module is imported (if enabled)
+# This allows schedulers to start even when using WSGI servers
+# Set AUTO_START_SCHEDULERS=false in .env to disable
+AUTO_START_SCHEDULERS = os.getenv('AUTO_START_SCHEDULERS', 'true').lower() == 'true'
+
+if AUTO_START_SCHEDULERS:
+    try:
+        # Start schedulers automatically when module loads
+        # This works for both direct execution and WSGI servers
+        start_all_schedulers_in_background()
+        logger.debug("Schedulers auto-started on module load")
+    except Exception as e:
+        logger.warning(f"Failed to auto-start schedulers: {str(e)}")
 
 if __name__ == '__main__':
     print("=" * 80)
     print("Starting Admin Panel...")
     print("=" * 80)
-    print("Starting all data collectors automatically...")
     
-    # Start all schedulers in background threads
-    scheduler_threads = start_all_schedulers_in_background()
-    
-    print(f"✓ All {len(scheduler_threads)} schedulers started in background")
+    # Schedulers are already started via AUTO_START_SCHEDULERS above
+    if _scheduler_threads:
+        print(f"✓ All {len(_scheduler_threads)} schedulers started in background")
+    else:
+        print("⚠ Schedulers not started. Use POST /api/schedulers/start to start them.")
     print("=" * 80)
     
     # Get host and port for display
