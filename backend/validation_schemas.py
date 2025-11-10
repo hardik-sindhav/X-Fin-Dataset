@@ -153,6 +153,15 @@ class ConfigUpdateSchema(Schema):
             end = datetime.strptime(value, '%H:%M').time()
             if end <= start:
                 raise ValidationError('end_time must be after start_time')
+    
+    @validates('start_time')
+    def validate_start_before_end(self, value):
+        """Validate that start_time is before end_time"""
+        if value and 'end_time' in self.context and self.context.get('end_time'):
+            start = datetime.strptime(value, '%H:%M').time()
+            end = datetime.strptime(self.context['end_time'], '%H:%M').time()
+            if end <= start:
+                raise ValidationError('start_time must be before end_time')
 
 
 class HolidaySchema(Schema):
