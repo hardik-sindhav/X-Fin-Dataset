@@ -167,6 +167,28 @@ def run_collector():
         logger.debug("=" * 60)
 
 
+def safe_run_collector():
+    """Wrapper to safely run collector and catch all exceptions"""
+    try:
+        run_collector()
+    except Exception as e:
+        logger.error(f"Unhandled exception in run_collector: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        # Don't re-raise - let scheduler continue running
+        # Update status file to indicate error
+        try:
+            status_data = {
+                "last_run": now_for_mongo().isoformat(),
+                "last_status": "error",
+                "error_message": str(e)
+            }
+            with open(STATUS_FILE, 'w') as f:
+                json.dump(status_data, f)
+        except:
+            pass
+
+
 def main():
     """Setup and run the scheduler"""
     config = get_scheduler_config()
@@ -185,7 +207,8 @@ def main():
     
     # Schedule job to run at specified interval
     # We'll check market hours and holidays inside the run_collector function
-    schedule.every(interval).minutes.do(run_collector)
+    # Use safe wrapper to prevent exceptions from stopping the scheduler
+    schedule.every(interval).minutes.do(safe_run_collector)
     
     logger.debug("Scheduler configured. Waiting for scheduled times...")
     
@@ -193,39 +216,56 @@ def main():
     now_ist = get_ist_now()
     if is_market_hours(now_ist):
         logger.debug(f"Market is open. Running collector immediately at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
-        run_collector()
+        safe_run_collector()
     
     # Keep the script running with error handling
     consecutive_errors = 0
-    max_consecutive_errors = 10
+    max_consecutive_errors = 50  # Increased from 10 to 50 to prevent premature stopping
     
-    try:
-        while True:
-            try:
-                schedule.run_pending()
-                # Reset error count on successful iteration
-                consecutive_errors = 0
-                # Sleep for 10 seconds for better timing accuracy
-                time.sleep(10)
-            except Exception as e:
-                consecutive_errors += 1
-                logger.error(f"Scheduler loop error (attempt {consecutive_errors}/{max_consecutive_errors}): {str(e)}")
-                import traceback
-                logger.error(traceback.format_exc())
-                
-                if consecutive_errors >= max_consecutive_errors:
-                    logger.error(f"Scheduler stopped after {max_consecutive_errors} consecutive errors")
-                    raise
-                
-                # Wait before retrying
-                time.sleep(30)
-    except KeyboardInterrupt:
-        logger.debug("Scheduler stopped by user")
-    except Exception as e:
-        logger.error(f"Scheduler fatal error: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        raise
+    # Wrap in outer loop to ensure scheduler keeps running even after fatal errors
+    while True:
+        try:
+            while True:
+                try:
+                    schedule.run_pending()
+                    # Reset error count on successful iteration
+                    consecutive_errors = 0
+                    # Sleep for 10 seconds for better timing accuracy
+                    time.sleep(10)
+                except KeyboardInterrupt:
+                    logger.debug("Scheduler stopped by user")
+                    return
+                except Exception as e:
+                    consecutive_errors += 1
+                    logger.error(f"Scheduler loop error (attempt {consecutive_errors}/{max_consecutive_errors}): {str(e)}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    
+                    if consecutive_errors >= max_consecutive_errors:
+                        logger.error(f"Scheduler encountered {max_consecutive_errors} consecutive errors")
+                        # Instead of stopping, log and continue with a longer delay
+                        logger.warning("Scheduler will retry after 5 minutes...")
+                        time.sleep(300)  # Wait 5 minutes before retrying
+                        consecutive_errors = 0  # Reset counter to allow retry
+                        continue
+                    
+                    # Wait before retrying
+                    time.sleep(30)
+        except KeyboardInterrupt:
+            logger.debug("Scheduler stopped by user")
+            break
+        except Exception as e:
+            logger.error(f"Scheduler fatal error: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            # Log error and restart the inner loop
+            logger.warning("Scheduler encountered fatal error. Restarting scheduler loop in 60 seconds...")
+            time.sleep(60)
+            consecutive_errors = 0  # Reset error counter
+            # Re-initialize schedule to ensure it's fresh
+            schedule.clear()
+            schedule.every(interval).minutes.do(safe_run_collector)
+            logger.info("Scheduler loop restarted")
 
 
 if __name__ == "__main__":
