@@ -195,16 +195,36 @@ def main():
         logger.debug(f"Market is open. Running collector immediately at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
         run_collector()
     
-    # Keep the script running
+    # Keep the script running with error handling
+    consecutive_errors = 0
+    max_consecutive_errors = 10
+    
     try:
         while True:
-            schedule.run_pending()
-            # Sleep for 10 seconds for better timing accuracy
-            time.sleep(10)
+            try:
+                schedule.run_pending()
+                # Reset error count on successful iteration
+                consecutive_errors = 0
+                # Sleep for 10 seconds for better timing accuracy
+                time.sleep(10)
+            except Exception as e:
+                consecutive_errors += 1
+                logger.error(f"Scheduler loop error (attempt {consecutive_errors}/{max_consecutive_errors}): {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+                
+                if consecutive_errors >= max_consecutive_errors:
+                    logger.error(f"Scheduler stopped after {max_consecutive_errors} consecutive errors")
+                    raise
+                
+                # Wait before retrying
+                time.sleep(30)
     except KeyboardInterrupt:
         logger.debug("Scheduler stopped by user")
     except Exception as e:
-        logger.error(f"Scheduler error: {str(e)}")
+        logger.error(f"Scheduler fatal error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise
 
 
