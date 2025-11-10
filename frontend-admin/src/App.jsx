@@ -27,6 +27,7 @@ import {
 import Login from './components/Login'
 import Settings from './components/Settings'
 import DetailView from './components/DetailView'
+import HeatmapView from './components/HeatmapView'
 import './App.css'
 
 import { API_BASE } from './config'
@@ -160,6 +161,11 @@ function App() {
   const [losersData, setLosersData] = useState([])
   const [losersStats, setLosersStats] = useState(null)
   
+  // Heatmap state
+  const [heatmapGainersData, setHeatmapGainersData] = useState(null)
+  const [heatmapLosersData, setHeatmapLosersData] = useState(null)
+  const [heatmapLoading, setHeatmapLoading] = useState(false)
+  
   const [loading, setLoading] = useState(false)
   const [loadingTab, setLoadingTab] = useState(null)
   const [loadedTabs, setLoadedTabs] = useState(new Set())
@@ -196,6 +202,84 @@ function App() {
   // Selected record for detail view
   const [selectedRecord, setSelectedRecord] = useState(null)
   const [selectedTabName, setSelectedTabName] = useState(null)
+  
+  // Config state
+  const [config, setConfig] = useState(null)
+  
+  // Helper function to get scheduler type for a tab
+  const getSchedulerTypeForTab = (tabName) => {
+    const tabToSchedulerMap = {
+      'fiidii': 'fiidii',
+      'option-chain': 'indices',
+      'banknifty': 'indices',
+      'finnifty': 'indices',
+      'midcpnifty': 'indices',
+      'hdfcbank': 'banks',
+      'icicibank': 'banks',
+      'sbin': 'banks',
+      'kotakbank': 'banks',
+      'axisbank': 'banks',
+      'bankbaroda': 'banks',
+      'pnb': 'banks',
+      'canbk': 'banks',
+      'aubank': 'banks',
+      'indusindbk': 'banks',
+      'idfcfirstb': 'banks',
+      'federalbnk': 'banks',
+      'gainers': 'gainers_losers',
+      'losers': 'gainers_losers',
+      'news': 'news',
+      'livemint-news': 'news'
+    }
+    return tabToSchedulerMap[tabName] || null
+  }
+  
+  // Helper function to render config status items
+  const renderConfigStatusItems = (tabName) => {
+    const schedulerType = getSchedulerTypeForTab(tabName)
+    if (!config || !schedulerType || !config[schedulerType]) {
+      return null
+    }
+    const schedulerConfig = config[schedulerType]
+    return (
+      <>
+        <StatusItem
+          label="Start Time"
+          value={schedulerConfig.start_time || 'N/A'}
+          icon={Clock}
+        />
+        <StatusItem
+          label="End Time"
+          value={schedulerConfig.end_time || 'N/A'}
+          icon={Clock}
+        />
+        <StatusItem
+          label="Interval"
+          value={schedulerConfig.interval_minutes ? `${schedulerConfig.interval_minutes} min` : 'N/A'}
+          icon={Clock}
+        />
+      </>
+    )
+  }
+  
+  // Load config on mount
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/config`, {
+          headers: { Authorization: `Bearer ${authToken}` }
+        })
+        if (response.data.success) {
+          setConfig(response.data.config)
+        }
+      } catch (error) {
+        console.error('Error loading config:', error)
+      }
+    }
+    if (isAuthenticated && authToken) {
+      loadConfig()
+    }
+  }, [isAuthenticated, authToken])
 
   // Fetch data for a specific tab only if not already loaded
   const fetchTabData = async (tabName, forceRefresh = false, page = 1, startDate = null, endDate = null) => {
@@ -734,6 +818,47 @@ function App() {
               has_prev: livemintDataRes.data.has_prev || false
             }
           }))
+          break
+
+        case 'heatmap':
+          setHeatmapLoading(true)
+          try {
+            // Get latest records from gainers and losers (first page = latest)
+            const [gainersListRes, losersListRes] = await Promise.all([
+              axios.get(`${API_BASE}/gainers/data?page=1&limit=1`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+              }),
+              axios.get(`${API_BASE}/losers/data?page=1&limit=1`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+              })
+            ])
+
+            const latestGainersRecord = gainersListRes.data.data?.[0]
+            const latestLosersRecord = losersListRes.data.data?.[0]
+
+            // Fetch full record data if we have IDs
+            if (latestGainersRecord?._id && latestLosersRecord?._id) {
+              const [gainersFullRes, losersFullRes] = await Promise.all([
+                axios.get(`${API_BASE}/gainers/data/${latestGainersRecord._id}`, {
+                  headers: { 'Authorization': `Bearer ${authToken}` }
+                }),
+                axios.get(`${API_BASE}/losers/data/${latestLosersRecord._id}`, {
+                  headers: { 'Authorization': `Bearer ${authToken}` }
+                })
+              ])
+
+              if (gainersFullRes.data.success) {
+                setHeatmapGainersData(gainersFullRes.data.data)
+              }
+              if (losersFullRes.data.success) {
+                setHeatmapLosersData(losersFullRes.data.data)
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching heatmap data:', error)
+          } finally {
+            setHeatmapLoading(false)
+          }
           break
 
         default:
@@ -1492,6 +1617,13 @@ function App() {
               Top 20 Losers
             </li>
             <li 
+              className={`sidebar-item ${activeTab === 'heatmap' ? 'active' : ''}`}
+              onClick={() => handleTabChange('heatmap')}
+            >
+              <BarChart3 size={20} />
+              Heatmap
+            </li>
+            <li 
               className={`sidebar-item ${activeTab === 'news' ? 'active' : ''}`}
               onClick={() => handleTabChange('news')}
             >
@@ -1671,6 +1803,7 @@ function App() {
                   icon={status?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={status?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('fiidii')}
               </div>
 
               <div className="actions">
@@ -1868,6 +2001,7 @@ function App() {
                   icon={optionChainStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={optionChainStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('option-chain')}
               </div>
 
               <div className="actions">
@@ -2060,6 +2194,7 @@ function App() {
                   icon={bankniftyStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={bankniftyStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('banknifty')}
               </div>
 
               <div className="actions">
@@ -2252,6 +2387,7 @@ function App() {
                   icon={finniftyStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={finniftyStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('finnifty')}
               </div>
 
               <div className="actions">
@@ -2444,6 +2580,7 @@ function App() {
                   icon={midcpniftyStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={midcpniftyStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('midcpnifty')}
               </div>
 
               <div className="actions">
@@ -2636,6 +2773,7 @@ function App() {
                   icon={hdfcbankStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={hdfcbankStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('hdfcbank')}
               </div>
 
               <div className="actions">
@@ -2828,6 +2966,7 @@ function App() {
                   icon={icicibankStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={icicibankStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('icicibank')}
               </div>
 
               <div className="actions">
@@ -3020,6 +3159,7 @@ function App() {
                   icon={sbinStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={sbinStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('sbin')}
               </div>
 
               <div className="actions">
@@ -3212,6 +3352,7 @@ function App() {
                   icon={kotakbankStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={kotakbankStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('kotakbank')}
               </div>
 
               <div className="actions">
@@ -3404,6 +3545,7 @@ function App() {
                   icon={axisbankStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={axisbankStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('axisbank')}
               </div>
 
               <div className="actions">
@@ -3596,6 +3738,7 @@ function App() {
                   icon={bankbarodaStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={bankbarodaStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('bankbaroda')}
               </div>
 
               <div className="actions">
@@ -3788,6 +3931,7 @@ function App() {
                   icon={pnbStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={pnbStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('pnb')}
               </div>
 
               <div className="actions">
@@ -3980,6 +4124,7 @@ function App() {
                   icon={canbkStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={canbkStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('canbk')}
               </div>
 
               <div className="actions">
@@ -4172,6 +4317,7 @@ function App() {
                   icon={aubankStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={aubankStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('aubank')}
               </div>
 
               <div className="actions">
@@ -4364,6 +4510,7 @@ function App() {
                   icon={indusindbkStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={indusindbkStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('indusindbk')}
               </div>
 
               <div className="actions">
@@ -4556,6 +4703,7 @@ function App() {
                   icon={idfcfirstbStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={idfcfirstbStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('idfcfirstb')}
               </div>
 
               <div className="actions">
@@ -4748,6 +4896,7 @@ function App() {
                   icon={federalbnkStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={federalbnkStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('federalbnk')}
               </div>
 
               <div className="actions">
@@ -4940,6 +5089,7 @@ function App() {
                   icon={gainersStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={gainersStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('gainers')}
               </div>
 
               <div className="actions">
@@ -5079,6 +5229,7 @@ function App() {
                   icon={losersStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={losersStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('losers')}
               </div>
 
               <div className="actions">
@@ -5218,6 +5369,7 @@ function App() {
                   icon={newsStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={newsStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('news')}
               </div>
 
               <div className="actions">
@@ -5393,6 +5545,7 @@ function App() {
                   icon={livemintNewsStatus?.last_status === 'success' ? CheckCircle : AlertCircle}
                   status={livemintNewsStatus?.last_status === 'success' ? 'success' : 'warning'}
                 />
+                {renderConfigStatusItems('livemint-news')}
               </div>
 
               <div className="actions">
@@ -5514,6 +5667,22 @@ function App() {
                 </div>
               )}
               <Pagination tabName="livemint-news" />
+            </div>
+          </>
+        ) : activeTab === 'heatmap' ? (
+          <>
+            <div className="card data-card">
+              <div className="card-header">
+                <h2>Stock Market Heatmap</h2>
+                <button onClick={refreshCurrentTab} className="btn-icon">
+                  <RefreshCw size={20} />
+                </button>
+              </div>
+              <HeatmapView 
+                gainersData={heatmapGainersData}
+                losersData={heatmapLosersData}
+                loading={heatmapLoading}
+              />
             </div>
           </>
         ) : null}

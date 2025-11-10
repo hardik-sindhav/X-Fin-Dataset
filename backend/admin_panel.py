@@ -5920,10 +5920,10 @@ def api_gainers_trigger():
         }), 500
 
 
-@app.route('/api/gainers/data/<record_id>', methods=['DELETE'])
+@app.route('/api/gainers/data/<record_id>', methods=['GET', 'DELETE'])
 @token_required
-def api_delete_gainers_data(record_id):
-    """API endpoint to delete a specific gainers record"""
+def api_gainers_data_by_id(record_id):
+    """API endpoint to get or delete a specific gainers record"""
     try:
         collector, collection = get_gainers_losers_collection("gainers")
         if collection is None:
@@ -5939,6 +5939,36 @@ def api_delete_gainers_data(record_id):
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
+        
+        if request.method == 'GET':
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            # Convert ObjectId to string and format dates
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": record.get("timestamp"),
+                "legends": record.get("legends", []),
+                "NIFTY": record.get("NIFTY", {}),
+                "BANKNIFTY": record.get("BANKNIFTY", {}),
+                "NIFTYNEXT50": record.get("NIFTYNEXT50", {}),
+                "allSec": record.get("allSec", {}),
+                "FOSec": record.get("FOSec", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
         
         elif request.method == 'DELETE':
             result = collection.delete_one({"_id": ObjectId(record_id)})
@@ -6146,10 +6176,10 @@ def api_losers_trigger():
         }), 500
 
 
-@app.route('/api/losers/data/<record_id>', methods=['DELETE'])
+@app.route('/api/losers/data/<record_id>', methods=['GET', 'DELETE'])
 @token_required
-def api_delete_losers_data(record_id):
-    """API endpoint to delete a specific losers record"""
+def api_losers_data_by_id(record_id):
+    """API endpoint to get or delete a specific losers record"""
     try:
         collector, collection = get_gainers_losers_collection("losers")
         if collection is None:
@@ -6165,6 +6195,36 @@ def api_delete_losers_data(record_id):
                 "success": False,
                 "error": "Invalid record ID"
             }), 400
+        
+        if request.method == 'GET':
+            # Get the full record
+            record = collection.find_one({"_id": ObjectId(record_id)})
+            collector.close()
+            
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "error": "Record not found"
+                }), 404
+            
+            # Convert ObjectId to string and format dates
+            record_dict = {
+                "_id": str(record.get("_id")),
+                "timestamp": record.get("timestamp"),
+                "legends": record.get("legends", []),
+                "NIFTY": record.get("NIFTY", {}),
+                "BANKNIFTY": record.get("BANKNIFTY", {}),
+                "NIFTYNEXT50": record.get("NIFTYNEXT50", {}),
+                "allSec": record.get("allSec", {}),
+                "FOSec": record.get("FOSec", {}),
+                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
+                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+            }
+            
+            return jsonify({
+                "success": True,
+                "data": record_dict
+            })
         
         elif request.method == 'DELETE':
             result = collection.delete_one({"_id": ObjectId(record_id)})
@@ -6685,8 +6745,18 @@ def api_update_config(validated_data):
         scheduler_type = validated_data['scheduler_type']
         config_updates = validated_data['config']
         
+        # Get existing config to merge with updates for validation
+        existing_config = get_config_for_scheduler(scheduler_type) or {}
+        
+        # Merge existing config with updates to validate complete config
+        merged_config = {**existing_config, **config_updates}
+        
         # Validate config updates using ConfigUpdateSchema
-        config_schema = ConfigUpdateSchema(context={'start_time': config_updates.get('start_time')})
+        # Pass both start_time and end_time in context for proper validation
+        config_schema = ConfigUpdateSchema(context={
+            'start_time': merged_config.get('start_time'),
+            'end_time': merged_config.get('end_time')
+        })
         try:
             validated_config = config_schema.load(config_updates)
         except ValidationError as err:
@@ -6695,6 +6765,18 @@ def api_update_config(validated_data):
                 "error": "Invalid config values",
                 "errors": err.messages
             }), 400
+        
+        # Additional validation: check if end_time is after start_time in merged config
+        if 'start_time' in merged_config and 'end_time' in merged_config:
+            from datetime import datetime
+            start = datetime.strptime(merged_config['start_time'], '%H:%M').time()
+            end = datetime.strptime(merged_config['end_time'], '%H:%M').time()
+            if end <= start:
+                return jsonify({
+                    "success": False,
+                    "error": "Invalid time range",
+                    "errors": {"end_time": ["end_time must be after start_time"]}
+                }), 400
         
         # Update configuration with validated data
         success = update_scheduler_config(scheduler_type, validated_config)
@@ -6811,13 +6893,23 @@ def start_all_schedulers_in_background():
         """Run scheduler in a separate thread"""
         def scheduler_worker():
             try:
-                logger.debug(f"Starting {scheduler_name}...")
+                logger.info(f"Starting {scheduler_name}...")
+                
+                # Ensure we're in the correct directory for imports
+                import sys
+                import os
+                backend_dir = os.path.dirname(os.path.abspath(__file__))
+                if backend_dir not in sys.path:
+                    sys.path.insert(0, backend_dir)
+                
                 # Import the scheduler module
+                logger.info(f"Importing module: {module_name}")
                 scheduler_module = __import__(module_name, fromlist=[])
+                logger.info(f"{scheduler_name} module imported successfully")
                 
                 # Check if module has a main function (most schedulers have this)
                 if hasattr(scheduler_module, 'main'):
-                    logger.debug(f"{scheduler_name} imported successfully, calling main()...")
+                    logger.info(f"{scheduler_name} has main() function, calling it...")
                     scheduler_module.main()
                 else:
                     logger.error(f"{scheduler_name} does not have a main() function")
@@ -6833,19 +6925,41 @@ def start_all_schedulers_in_background():
         
         thread = threading.Thread(target=scheduler_worker, daemon=True, name=scheduler_name)
         thread.start()
-        logger.debug(f"Thread started for {scheduler_name} (daemon thread)")
+        logger.info(f"Thread started for {scheduler_name} (daemon thread, ID: {thread.ident})")
         return thread
     
     threads = []
     
     # Start each scheduler in a separate thread
     for module_name, scheduler_name in schedulers:
-        thread = run_scheduler_in_thread(module_name, scheduler_name)
-        threads.append((thread, scheduler_name))
-        time_module.sleep(0.5)  # Small delay between starting schedulers
+        try:
+            logger.info(f"Attempting to start {scheduler_name} ({module_name})...")
+            thread = run_scheduler_in_thread(module_name, scheduler_name)
+            threads.append((thread, scheduler_name))
+            logger.info(f"✓ {scheduler_name} thread created successfully")
+            time_module.sleep(0.5)  # Small delay between starting schedulers
+        except Exception as e:
+            logger.error(f"Failed to start {scheduler_name}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
     
     _scheduler_threads = threads
-    logger.info(f"All {len(threads)} schedulers started successfully in background")
+    logger.info(f"All {len(threads)} scheduler threads created")
+    
+    # Wait a moment for threads to initialize
+    time_module.sleep(1)
+    
+    # Verify threads are alive
+    alive_count = sum(1 for thread, name in threads if thread.is_alive())
+    logger.info(f"Active scheduler threads: {alive_count}/{len(threads)}")
+    
+    # Log which schedulers are alive
+    for thread, name in threads:
+        status = "✓ ALIVE" if thread.is_alive() else "✗ DEAD"
+        logger.info(f"  {status} - {name} (Thread ID: {thread.ident})")
+    
+    if alive_count < len(threads):
+        logger.warning(f"Warning: {len(threads) - alive_count} scheduler(s) failed to start!")
     
     return threads
 
@@ -6946,10 +7060,16 @@ if AUTO_START_SCHEDULERS:
     try:
         # Start schedulers automatically when module loads
         # This works for both direct execution and WSGI servers
+        logger.info("=" * 80)
+        logger.info("Auto-starting all schedulers...")
+        logger.info("=" * 80)
         start_all_schedulers_in_background()
-        logger.debug("Schedulers auto-started on module load")
+        logger.info("Schedulers auto-started on module load")
+        logger.info("=" * 80)
     except Exception as e:
-        logger.warning(f"Failed to auto-start schedulers: {str(e)}")
+        logger.error(f"Failed to auto-start schedulers: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 if __name__ == '__main__':
     print("=" * 80)
@@ -6958,7 +7078,11 @@ if __name__ == '__main__':
     
     # Schedulers are already started via AUTO_START_SCHEDULERS above
     if _scheduler_threads:
-        print(f"✓ All {len(_scheduler_threads)} schedulers started in background")
+        alive_count = sum(1 for thread, name in _scheduler_threads if thread.is_alive())
+        print(f"✓ {alive_count}/{len(_scheduler_threads)} schedulers running in background")
+        if alive_count < len(_scheduler_threads):
+            print(f"⚠ Warning: {len(_scheduler_threads) - alive_count} scheduler(s) failed to start")
+            print("  Check logs for details")
     else:
         print("⚠ Schedulers not started. Use POST /api/schedulers/start to start them.")
     print("=" * 80)
