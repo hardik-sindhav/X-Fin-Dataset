@@ -619,7 +619,7 @@ def api_login(validated_data):
             # Generate JWT token
             token_payload = {
                 'username': username,
-                'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
+                'exp': datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
             }
             token = jwt.encode(token_payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
             
@@ -6868,32 +6868,24 @@ def api_remove_holiday(validated_data):
 
 # Global variable to track scheduler threads
 _scheduler_threads = []
+_scheduler_watchdog_thread = None
+_scheduler_config = [
+    ('cronjob_scheduler', 'FII/DII Data Collector'),
+    ('all_indices_option_chain_scheduler', 'All Indices Option Chain Collector (4 indices)'),
+    ('all_banks_option_chain_scheduler', 'All Banks Option Chain Collector (12 banks)'),
+    ('all_gainers_losers_scheduler', 'All Gainers/Losers Collector (2 types)'),
+    ('news_collector_scheduler', 'News Collector'),
+    ('livemint_news_scheduler', 'LiveMint News Collector'),
+]
 
-def start_all_schedulers_in_background():
-    """Start all schedulers in background threads"""
-    global _scheduler_threads
-    
-    # Use centralized logging configuration
-    logger = get_logger(__name__)
-    
-    logger.info("Starting All Data Collectors in Background")
-    logger.debug(f"Started at: {datetime.now()}")
-    
-    # List of all schedulers
-    schedulers = [
-        ('cronjob_scheduler', 'FII/DII Data Collector'),
-        ('all_indices_option_chain_scheduler', 'All Indices Option Chain Collector (4 indices)'),
-        ('all_banks_option_chain_scheduler', 'All Banks Option Chain Collector (12 banks)'),
-        ('all_gainers_losers_scheduler', 'All Gainers/Losers Collector (2 types)'),
-        ('news_collector_scheduler', 'News Collector'),
-        ('livemint_news_scheduler', 'LiveMint News Collector'),
-    ]
-    
-    def run_scheduler_in_thread(module_name, scheduler_name):
-        """Run scheduler in a separate thread"""
-        def scheduler_worker():
+def run_scheduler_in_thread(module_name, scheduler_name, max_retries=3, retry_delay=30):
+    """Run scheduler in a separate thread with auto-restart on failure"""
+    def scheduler_worker():
+        retry_count = 0
+        while retry_count < max_retries:
             try:
-                logger.info(f"Starting {scheduler_name}...")
+                logger = get_logger(__name__)
+                logger.info(f"Starting {scheduler_name}... (Attempt {retry_count + 1}/{max_retries})")
                 
                 # Ensure we're in the correct directory for imports
                 import sys
@@ -6910,23 +6902,122 @@ def start_all_schedulers_in_background():
                 # Check if module has a main function (most schedulers have this)
                 if hasattr(scheduler_module, 'main'):
                     logger.info(f"{scheduler_name} has main() function, calling it...")
+                    # Reset retry count on successful start
+                    retry_count = 0
                     scheduler_module.main()
+                    # If main() returns, it means the scheduler stopped normally
+                    logger.warning(f"{scheduler_name} main() function returned. Scheduler may have stopped.")
+                    break
                 else:
                     logger.error(f"{scheduler_name} does not have a main() function")
+                    break
                 
             except ImportError as e:
+                logger = get_logger(__name__)
                 logger.error(f"Failed to import {module_name}: {str(e)}")
                 import traceback
                 logger.error(traceback.format_exc())
+                retry_count += 1
+                if retry_count < max_retries:
+                    logger.info(f"Retrying {scheduler_name} in {retry_delay} seconds...")
+                    time_module.sleep(retry_delay)
+                else:
+                    logger.error(f"{scheduler_name} failed after {max_retries} attempts. Giving up.")
+                    break
+            except KeyboardInterrupt:
+                logger = get_logger(__name__)
+                logger.info(f"{scheduler_name} stopped by user")
+                break
             except Exception as e:
+                logger = get_logger(__name__)
                 logger.error(f"Error in {scheduler_name} thread: {str(e)}")
                 import traceback
                 logger.error(traceback.format_exc())
+                retry_count += 1
+                if retry_count < max_retries:
+                    logger.warning(f"{scheduler_name} crashed. Restarting in {retry_delay} seconds... (Attempt {retry_count + 1}/{max_retries})")
+                    time_module.sleep(retry_delay)
+                else:
+                    logger.error(f"{scheduler_name} failed after {max_retries} attempts. Will be restarted by watchdog.")
+                    # Don't break - let watchdog restart it
+                    time_module.sleep(60)  # Wait before retry (watchdog will handle)
+                    retry_count = 0  # Reset for watchdog restart
         
-        thread = threading.Thread(target=scheduler_worker, daemon=True, name=scheduler_name)
-        thread.start()
-        logger.info(f"Thread started for {scheduler_name} (daemon thread, ID: {thread.ident})")
-        return thread
+        logger = get_logger(__name__)
+        logger.error(f"{scheduler_name} worker thread exited")
+    
+    thread = threading.Thread(target=scheduler_worker, daemon=True, name=scheduler_name)
+    thread.start()
+    logger = get_logger(__name__)
+    logger.info(f"Thread started for {scheduler_name} (daemon thread, ID: {thread.ident})")
+    return thread
+
+def start_scheduler_watchdog():
+    """Start a watchdog thread that monitors and restarts dead schedulers"""
+    global _scheduler_threads, _scheduler_watchdog_thread, _scheduler_config
+    
+    def watchdog_worker():
+        logger = get_logger(__name__)
+        logger.info("Scheduler watchdog started. Monitoring schedulers every 60 seconds...")
+        
+        while True:
+            try:
+                time_module.sleep(60)  # Check every minute
+                
+                if not _scheduler_threads:
+                    continue
+                
+                # Check each scheduler thread
+                for i, (thread, name) in enumerate(_scheduler_threads):
+                    if not thread.is_alive():
+                        logger.warning(f"⚠️  {name} thread is DEAD. Restarting...")
+                        
+                        # Find the module name for this scheduler
+                        module_name = None
+                        for mod_name, sched_name in _scheduler_config:
+                            if sched_name == name:
+                                module_name = mod_name
+                                break
+                        
+                        if module_name:
+                            # Restart the scheduler
+                            try:
+                                new_thread = run_scheduler_in_thread(module_name, name, max_retries=3, retry_delay=30)
+                                _scheduler_threads[i] = (new_thread, name)
+                                logger.info(f"✓ {name} restarted successfully (New Thread ID: {new_thread.ident})")
+                            except Exception as e:
+                                logger.error(f"Failed to restart {name}: {str(e)}")
+                        else:
+                            logger.error(f"Could not find module name for {name}")
+                
+                # Log status every 5 minutes
+                if int(time_module.time()) % 300 == 0:  # Every 5 minutes
+                    alive_count = sum(1 for thread, name in _scheduler_threads if thread.is_alive())
+                    logger.info(f"Watchdog status: {alive_count}/{len(_scheduler_threads)} schedulers alive")
+                    
+            except Exception as e:
+                logger = get_logger(__name__)
+                logger.error(f"Error in watchdog thread: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
+    
+    _scheduler_watchdog_thread = threading.Thread(target=watchdog_worker, daemon=True, name="SchedulerWatchdog")
+    _scheduler_watchdog_thread.start()
+    logger = get_logger(__name__)
+    logger.info("Scheduler watchdog thread started")
+
+def start_all_schedulers_in_background():
+    """Start all schedulers in background threads"""
+    global _scheduler_threads, _scheduler_config
+    
+    # Use centralized logging configuration
+    logger = get_logger(__name__)
+    
+    logger.info("Starting All Data Collectors in Background")
+    logger.debug(f"Started at: {datetime.now()}")
+    
+    # Use the global scheduler config
+    schedulers = _scheduler_config
     
     threads = []
     
@@ -6934,7 +7025,7 @@ def start_all_schedulers_in_background():
     for module_name, scheduler_name in schedulers:
         try:
             logger.info(f"Attempting to start {scheduler_name} ({module_name})...")
-            thread = run_scheduler_in_thread(module_name, scheduler_name)
+            thread = run_scheduler_in_thread(module_name, scheduler_name, max_retries=3, retry_delay=30)
             threads.append((thread, scheduler_name))
             logger.info(f"✓ {scheduler_name} thread created successfully")
             time_module.sleep(0.5)  # Small delay between starting schedulers
@@ -6945,6 +7036,11 @@ def start_all_schedulers_in_background():
     
     _scheduler_threads = threads
     logger.info(f"All {len(threads)} scheduler threads created")
+    
+    # Start watchdog if not already running
+    global _scheduler_watchdog_thread
+    if _scheduler_watchdog_thread is None or not _scheduler_watchdog_thread.is_alive():
+        start_scheduler_watchdog()
     
     # Wait a moment for threads to initialize
     time_module.sleep(1)
@@ -6959,7 +7055,7 @@ def start_all_schedulers_in_background():
         logger.info(f"  {status} - {name} (Thread ID: {thread.ident})")
     
     if alive_count < len(threads):
-        logger.warning(f"Warning: {len(threads) - alive_count} scheduler(s) failed to start!")
+        logger.warning(f"Warning: {len(threads) - alive_count} scheduler(s) failed to start! Watchdog will attempt to restart them.")
     
     return threads
 
