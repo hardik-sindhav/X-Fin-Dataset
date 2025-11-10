@@ -285,7 +285,8 @@ class NSEAllIndicesOptionChainCollector:
             return True  # Duplicate prevention working correctly
             
         except Exception as e:
-            logger.error(f"Failed to save {symbol} data to MongoDB: {str(e)}")
+            error_msg = str(e)
+            logger.error(f"Failed to save {symbol} data to MongoDB: {error_msg}")
             return False
     
     def collect_and_save_single_index(self, index: Dict) -> bool:

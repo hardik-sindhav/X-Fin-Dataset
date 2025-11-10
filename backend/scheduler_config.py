@@ -30,6 +30,18 @@ DEFAULT_CONFIG = {
         "end_time": "15:30",
         "enabled": True
     },
+    "gainers": {
+        "interval_minutes": 3,
+        "start_time": "09:15",
+        "end_time": "15:30",
+        "enabled": True
+    },
+    "losers": {
+        "interval_minutes": 3,
+        "start_time": "09:15",
+        "end_time": "15:30",
+        "enabled": True
+    },
     "news": {
         "interval_minutes": 3,
         "start_time": "09:15",
@@ -92,7 +104,7 @@ def save_config(config: Dict) -> bool:
 def get_config_for_scheduler(scheduler_type: str) -> Optional[Dict]:
     """
     Get configuration for a specific scheduler type
-    scheduler_type: 'banks', 'indices', 'gainers_losers', 'news', 'fiidii'
+    scheduler_type: 'banks', 'indices', 'gainers_losers', 'gainers', 'losers', 'news', 'fiidii'
     """
     config = load_config()
     return config.get(scheduler_type)

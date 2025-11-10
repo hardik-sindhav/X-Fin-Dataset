@@ -1,13 +1,13 @@
 """
-Cronjob Scheduler for NSE All Gainers and Losers Data Collector
+Cronjob Scheduler for NSE Top 20 Losers Data Collector
 Runs Monday to Friday from 09:15 AM to 03:30 PM, every 3 minutes
-Collects data for both gainers and losers in a single run
+Collects data for top 20 losers
 """
 
 import schedule
 import time
 import threading
-from nse_all_gainers_losers_collector import NSEAllGainersLosersCollector, GAINERS_LOSERS
+from nse_all_gainers_losers_collector import NSEAllGainersLosersCollector
 from datetime import datetime, time as dt_time, timedelta, date, timezone
 from scheduler_config import get_config_for_scheduler, is_holiday
 from timezone_utils import get_ist_now, now_for_mongo
@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 # Load configuration
 def get_scheduler_config():
     """Get scheduler configuration from config file"""
-    config = get_config_for_scheduler("gainers_losers")
+    config = get_config_for_scheduler("losers")
     if config:
         return config
     # Fallback to defaults
@@ -32,7 +32,7 @@ def get_scheduler_config():
         "enabled": True
     }
 
-STATUS_FILE = 'all_gainers_losers_scheduler_status.json'
+STATUS_FILE = 'losers_scheduler_status.json'
 
 # Execution lock to prevent concurrent runs
 execution_lock = threading.Lock()
@@ -74,17 +74,19 @@ def is_market_hours(now: datetime) -> bool:
 
 
 def run_collector():
-    """Execute the collector for both gainers and losers"""
+    """Execute the collector for losers"""
     global last_run_time
     
+    # Check if already running (non-blocking check)
     if not execution_lock.acquire(blocking=False):
-        logger.debug("All Gainers/Losers Collector is already running, skipping this execution")
+        logger.debug("Collector is already running, skipping this execution")
         return
     
+    # Check minimum interval
     now_ist = get_ist_now()
     config = get_scheduler_config()
     interval_minutes = config.get("interval_minutes", 3)
-    min_interval_seconds = interval_minutes * 60 - 10
+    min_interval_seconds = interval_minutes * 60 - 10  # Allow 10 seconds buffer
     
     collector = None
     lock_acquired = True
@@ -103,43 +105,25 @@ def run_collector():
             return
         
         logger.debug("=" * 60)
-        logger.debug(f"All Gainers/Losers Cronjob triggered at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
-        logger.debug(f"Collecting data for {len(GAINERS_LOSERS)} types")
+        logger.debug(f"Top 20 Losers Cronjob triggered at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
         logger.debug("=" * 60)
         
         last_run_time = now_ist
         collector = NSEAllGainersLosersCollector()
-        results = collector.collect_and_save_all()  # This returns a dict of results per type
+        success = collector.collect_and_save_single("losers")
         
-        # Count successes and failures
-        successful = sum(1 for success in results.values() if success)
-        failed = len(results) - successful
-        
-        if successful == len(GAINERS_LOSERS):
-            logger.debug(f"All Gainers/Losers Cronjob completed successfully - All {len(GAINERS_LOSERS)} types collected")
+        if success:
+            logger.debug("Top 20 Losers Cronjob completed successfully")
             overall_status = "success"
-        elif successful > 0:
-            logger.warning(f"All Gainers/Losers Cronjob completed with partial success - {successful}/{len(GAINERS_LOSERS)} types successful")
-            overall_status = "partial"
         else:
-            logger.error(f"All Gainers/Losers Cronjob completed with errors - All {len(GAINERS_LOSERS)} types failed")
+            logger.error("Top 20 Losers Cronjob completed with errors")
             overall_status = "failed"
-        
-        # Log individual type results only if there are failures
-        if failed > 0:
-            for data_type, success in results.items():
-                if not success:
-                    display_name = next((c["display_name"] for c in GAINERS_LOSERS if c["type"] == data_type), data_type)
-                    logger.warning(f"  ✗ {display_name}: Failed")
         
         # Update status file
         status_data = {
             "last_run": now_for_mongo().isoformat(),
             "last_status": overall_status,
-            "successful": successful,
-            "failed": failed,
-            "total": len(GAINERS_LOSERS),
-            "results": results
+            "success": success
         }
         try:
             with open(STATUS_FILE, 'w') as f:
@@ -148,7 +132,7 @@ def run_collector():
             logger.warning(f"Failed to update status file: {str(e)}")
             
     except Exception as e:
-        logger.error(f"All Gainers/Losers Cronjob failed with error: {str(e)}", exc_info=True)
+        logger.error(f"Top 20 Losers Cronjob failed with error: {str(e)}", exc_info=True)
         # Update status file with error
         status_data = {
             "last_run": now_for_mongo().isoformat(),
@@ -176,7 +160,7 @@ def main():
     end_time = config.get("end_time", "15:30")
     enabled = config.get("enabled", True)
     
-    logger.info("Starting All Gainers/Losers scheduler")
+    logger.info("Starting NSE Top 20 Losers Data Collector Scheduler")
     logger.debug(f"Schedule: Monday to Friday from {start_time} to {end_time}, every {interval} minutes")
     logger.debug(f"Enabled: {enabled}")
     
