@@ -15,7 +15,7 @@ from scheduler_config import (
     get_holidays, add_holiday, remove_holiday, is_holiday
 )
 from nse_all_banks_option_chain_collector import NSEAllBanksOptionChainCollector, BANKS
-from nse_all_gainers_losers_collector import NSEAllGainersLosersCollector
+from nse_gainers_losers_collector import NSEGainersLosersCollector
 from nse_news_collector import NSENewsCollector
 from nse_livemint_news_collector import NSELiveMintNewsCollector
 
@@ -828,7 +828,7 @@ def api_trigger():
 def get_interval_scheduler_next_run_time(scheduler_type):
     """
     Calculate next scheduled run time for interval-based schedulers using config
-    scheduler_type: 'indices', 'banks', 'gainers_losers', 'gainers', 'losers', 'news'
+    scheduler_type: 'indices', 'banks', 'gainers', 'losers', 'news'
     """
     from scheduler_config import get_config_for_scheduler
     config = get_config_for_scheduler(scheduler_type)
@@ -2224,13 +2224,13 @@ def get_index_collection(symbol: str):
 # Helper function to get collection for gainers or losers
 def get_gainers_collection():
     """Get MongoDB collection for gainers"""
-    collector = NSEAllGainersLosersCollector()
+    collector = NSEGainersLosersCollector()
     collection = collector.get_collection("gainers")
     return collector, collection
 
 def get_losers_collection():
     """Get MongoDB collection for losers"""
-    collector = NSEAllGainersLosersCollector()
+    collector = NSEGainersLosersCollector()
     collection = collector.get_collection("losers")
     return collector, collection
 
@@ -5791,21 +5791,11 @@ def api_gainers_data():
         # Convert ObjectId to string and format dates
         data = []
         for record in records:
-            # Get timestamp from record (could be in various places)
-            timestamp = None
-            for key in ['NIFTY', 'BANKNIFTY', 'NIFTYNEXT50', 'allSec', 'FOSec']:
-                if key in record and isinstance(record[key], dict):
-                    section_timestamp = record[key].get('timestamp')
-                    if section_timestamp:
-                        timestamp = section_timestamp
-                        break
-            
+            timestamp = record.get("timestamp")
             record_dict = {
                 "_id": str(record.get("_id")),
-                "timestamp": timestamp or record.get("timestamp"),
-                "legends": record.get("legends", []),
-                "nifty_count": len(record.get("NIFTY", {}).get("data", [])) if isinstance(record.get("NIFTY"), dict) else 0,
-                "banknifty_count": len(record.get("BANKNIFTY", {}).get("data", [])) if isinstance(record.get("BANKNIFTY"), dict) else 0,
+                "timestamp": timestamp,
+                "data": record,
                 "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
                 "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
             }
@@ -5850,28 +5840,11 @@ def api_gainers_stats():
         # Get latest record
         latest = collection.find_one(sort=[("timestamp", -1)])
         
-        latest_timestamp = None
-        nifty_count = 0
-        banknifty_count = 0
-        if latest:
-            # Get timestamp from latest record
-            for key in ['NIFTY', 'BANKNIFTY', 'NIFTYNEXT50', 'allSec', 'FOSec']:
-                if key in latest and isinstance(latest[key], dict):
-                    section_timestamp = latest[key].get('timestamp')
-                    if section_timestamp:
-                        latest_timestamp = section_timestamp
-                        break
-            
-            if isinstance(latest.get("NIFTY"), dict):
-                nifty_count = len(latest.get("NIFTY", {}).get("data", []))
-            if isinstance(latest.get("BANKNIFTY"), dict):
-                banknifty_count = len(latest.get("BANKNIFTY", {}).get("data", []))
+        latest_timestamp = latest.get("timestamp") if latest else None
         
         stats = {
             "total_records": total_count,
-            "latest_timestamp": latest_timestamp,
-            "latest_nifty_count": nifty_count,
-            "latest_banknifty_count": banknifty_count
+            "latest_timestamp": latest_timestamp
         }
         
         collector.close()
@@ -5891,7 +5864,7 @@ def api_gainers_stats():
 def api_gainers_trigger():
     """API endpoint to manually trigger gainers data collection"""
     try:
-        collector = NSEAllGainersLosersCollector()
+        collector = NSEGainersLosersCollector()
         success = collector.collect_and_save_single("gainers")
         collector.close()
         
@@ -5941,12 +5914,7 @@ def api_gainers_data_by_id(record_id):
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": record.get("timestamp"),
-                "legends": record.get("legends", []),
-                "NIFTY": record.get("NIFTY", {}),
-                "BANKNIFTY": record.get("BANKNIFTY", {}),
-                "NIFTYNEXT50": record.get("NIFTYNEXT50", {}),
-                "allSec": record.get("allSec", {}),
-                "FOSec": record.get("FOSec", {}),
+                "data": record,
                 "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
                 "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
             }
@@ -6072,21 +6040,11 @@ def api_losers_data():
         # Convert ObjectId to string and format dates
         data = []
         for record in records:
-            # Get timestamp from record (could be in various places)
-            timestamp = None
-            for key in ['NIFTY', 'BANKNIFTY', 'NIFTYNEXT50', 'allSec', 'FOSec']:
-                if key in record and isinstance(record[key], dict):
-                    section_timestamp = record[key].get('timestamp')
-                    if section_timestamp:
-                        timestamp = section_timestamp
-                        break
-            
+            timestamp = record.get("timestamp")
             record_dict = {
                 "_id": str(record.get("_id")),
-                "timestamp": timestamp or record.get("timestamp"),
-                "legends": record.get("legends", []),
-                "nifty_count": len(record.get("NIFTY", {}).get("data", [])) if isinstance(record.get("NIFTY"), dict) else 0,
-                "banknifty_count": len(record.get("BANKNIFTY", {}).get("data", [])) if isinstance(record.get("BANKNIFTY"), dict) else 0,
+                "timestamp": timestamp,
+                "data": record,
                 "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
                 "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
             }
@@ -6131,28 +6089,11 @@ def api_losers_stats():
         # Get latest record
         latest = collection.find_one(sort=[("timestamp", -1)])
         
-        latest_timestamp = None
-        nifty_count = 0
-        banknifty_count = 0
-        if latest:
-            # Get timestamp from latest record
-            for key in ['NIFTY', 'BANKNIFTY', 'NIFTYNEXT50', 'allSec', 'FOSec']:
-                if key in latest and isinstance(latest[key], dict):
-                    section_timestamp = latest[key].get('timestamp')
-                    if section_timestamp:
-                        latest_timestamp = section_timestamp
-                        break
-            
-            if isinstance(latest.get("NIFTY"), dict):
-                nifty_count = len(latest.get("NIFTY", {}).get("data", []))
-            if isinstance(latest.get("BANKNIFTY"), dict):
-                banknifty_count = len(latest.get("BANKNIFTY", {}).get("data", []))
+        latest_timestamp = latest.get("timestamp") if latest else None
         
         stats = {
             "total_records": total_count,
-            "latest_timestamp": latest_timestamp,
-            "latest_nifty_count": nifty_count,
-            "latest_banknifty_count": banknifty_count
+            "latest_timestamp": latest_timestamp
         }
         
         collector.close()
@@ -6172,7 +6113,7 @@ def api_losers_stats():
 def api_losers_trigger():
     """API endpoint to manually trigger losers data collection"""
     try:
-        collector = NSEAllGainersLosersCollector()
+        collector = NSEGainersLosersCollector()
         success = collector.collect_and_save_single("losers")
         collector.close()
         
@@ -6222,12 +6163,7 @@ def api_losers_data_by_id(record_id):
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": record.get("timestamp"),
-                "legends": record.get("legends", []),
-                "NIFTY": record.get("NIFTY", {}),
-                "BANKNIFTY": record.get("BANKNIFTY", {}),
-                "NIFTYNEXT50": record.get("NIFTYNEXT50", {}),
-                "allSec": record.get("allSec", {}),
-                "FOSec": record.get("FOSec", {}),
+                "data": record,
                 "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
                 "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
             }
