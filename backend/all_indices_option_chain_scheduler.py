@@ -46,15 +46,18 @@ def is_market_hours(now: datetime) -> bool:
     """
     # Check if it's a holiday
     if is_holiday(now.date()):
+        logger.debug(f"Market closed: Holiday - {now.date()}")
         return False
     
     # Check if weekday (Monday=0 to Friday=4)
     if now.weekday() >= 5:  # Saturday or Sunday
+        logger.debug(f"Market closed: Weekend - {now.strftime('%A')}")
         return False
     
     # Get config
     config = get_scheduler_config()
     if not config.get("enabled", True):
+        logger.debug("Market closed: Scheduler disabled in config")
         return False
     
     # Parse start and end times from config
@@ -66,10 +69,18 @@ def is_market_hours(now: datetime) -> bool:
     
     current_time = now.time()
     
-    # Check if time is between start and end
-    if current_time < start_time or current_time > end_time:
+    # Check if time is between start and end (inclusive of end_time)
+    # Allow running from start_time up to and including end_time
+    # Stop only after end_time has passed
+    if current_time < start_time:
+        logger.debug(f"Market closed: Before start time. Current: {current_time}, Start: {start_time}")
+        return False
+    # Allow running at exactly end_time, stop only after end_time
+    if current_time > end_time:
+        logger.debug(f"Market closed: After end time. Current: {current_time}, End: {end_time}")
         return False
     
+    logger.debug(f"Market open: {current_time} is between {start_time} and {end_time}")
     return True
 
 
@@ -89,19 +100,19 @@ def run_collector():
     min_interval_seconds = interval_minutes * 60 - 10  # Allow 10 seconds buffer
     
     collector = None
-    lock_acquired = True
     try:
         if last_run_time:
             time_since_last_run = (now_ist - last_run_time).total_seconds()
             if time_since_last_run < min_interval_seconds:
                 logger.debug(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
-                lock_acquired = False
                 return
         
         # Check if it's market hours before running
         if not is_market_hours(now_ist):
-            logger.debug(f"Outside market hours. Current time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
-            lock_acquired = False
+            config = get_scheduler_config()
+            start_time = config.get("start_time", "09:15")
+            end_time = config.get("end_time", "15:30")
+            logger.debug(f"Outside market hours. Current time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST, Market hours: {start_time} to {end_time}")
             return
         
         logger.debug("=" * 60)
@@ -164,8 +175,9 @@ def run_collector():
     finally:
         if collector:
             collector.close()
-        if lock_acquired:
-            execution_lock.release()
+        # Always release the lock, even if we returned early or had an error
+        # This ensures the scheduler can restart after crashes or errors
+        execution_lock.release()
         logger.debug("=" * 60)
 
 

@@ -3,7 +3,7 @@ Admin Panel for NSE FII/DII Data Collector
 Web interface to monitor cronjob status and view data
 """
 
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, Response, stream_with_context
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -640,7 +640,9 @@ def api_mongodb_health():
 @token_required
 @limiter.limit("2 per hour")  # Limit backup requests to prevent abuse
 def api_backup():
-    """API endpoint to create and download a backup of all MongoDB collections"""
+    """API endpoint to create and download a backup of all MongoDB collections
+    Uses batch processing to handle large databases without timeout issues
+    """
     try:
         from pymongo import MongoClient
         
@@ -651,7 +653,7 @@ def api_backup():
         MONGO_USERNAME = os.getenv('MONGO_USERNAME', None)
         MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', None)
         
-        # Build MongoDB URI
+        # Build MongoDB URI with increased timeouts for large databases
         if MONGO_USERNAME and MONGO_PASSWORD:
             encoded_username = quote_plus(MONGO_USERNAME)
             encoded_password = quote_plus(MONGO_PASSWORD)
@@ -660,94 +662,141 @@ def api_backup():
         else:
             mongo_uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
         
-        # Connect to MongoDB
-        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=10000)
+        # Connect to MongoDB with increased timeouts for large databases
+        # serverSelectionTimeoutMS: 30 seconds to connect
+        # socketTimeoutMS: 2 hours for large operations
+        # connectTimeoutMS: 30 seconds
+        client = MongoClient(
+            mongo_uri,
+            serverSelectionTimeoutMS=30000,
+            socketTimeoutMS=7200000,  # 2 hours for large backups
+            connectTimeoutMS=30000
+        )
         client.admin.command('ping')
         db = client[MONGO_DB_NAME]
         
         # Get all collections
         collections = db.list_collection_names()
         
-        # Create in-memory zip file
-        zip_buffer = io.BytesIO()
+        # Batch size for processing large collections
+        BATCH_SIZE = 1000
         
-        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-            # Create metadata file
-            metadata = {
-                "backup_date": datetime.now().isoformat(),
-                "database": MONGO_DB_NAME,
-                "collections": collections,
-                "total_collections": len(collections)
-            }
-            zip_file.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
+        def convert_objectids(obj):
+            """Recursively convert ObjectId to string"""
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    if isinstance(value, ObjectId):
+                        obj[key] = str(value)
+                    elif isinstance(value, dict):
+                        convert_objectids(value)
+                    elif isinstance(value, list):
+                        for item in value:
+                            convert_objectids(item)
+            elif isinstance(obj, list):
+                for item in obj:
+                    convert_objectids(item)
+        
+        def generate_backup():
+            """Generator function to stream backup data"""
+            # Create in-memory zip file
+            zip_buffer = io.BytesIO()
             
-            # Export each collection
-            for collection_name in collections:
-                try:
-                    collection = db[collection_name]
-                    # Get all documents from collection
-                    documents = list(collection.find({}))
-                    
-                    # Convert ObjectId to string for JSON serialization
-                    for doc in documents:
-                        if '_id' in doc:
-                            doc['_id'] = str(doc['_id'])
-                        # Convert any nested ObjectIds
-                        def convert_objectids(obj):
-                            if isinstance(obj, dict):
-                                for key, value in obj.items():
-                                    if isinstance(value, ObjectId):
-                                        obj[key] = str(value)
-                                    elif isinstance(value, dict):
-                                        convert_objectids(value)
-                                    elif isinstance(value, list):
-                                        for item in value:
-                                            convert_objectids(item)
-                            elif isinstance(obj, list):
-                                for item in obj:
-                                    convert_objectids(item)
-                        
-                        convert_objectids(doc)
-                    
-                    # Write collection data to zip
-                    collection_data = {
-                        "collection_name": collection_name,
-                        "document_count": len(documents),
-                        "documents": documents
+            try:
+                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                    # Create metadata file
+                    metadata = {
+                        "backup_date": datetime.now().isoformat(),
+                        "database": MONGO_DB_NAME,
+                        "collections": collections,
+                        "total_collections": len(collections)
                     }
-                    zip_file.writestr(
-                        f"collections/{collection_name}.json",
-                        json.dumps(collection_data, indent=2, default=str)
-                    )
+                    zip_file.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
                     
-                    logger.info(f"Exported collection: {collection_name} ({len(documents)} documents)")
-                    
-                except Exception as e:
-                    logger.error(f"Error exporting collection {collection_name}: {str(e)}")
-                    # Continue with other collections even if one fails
-                    error_info = {
-                        "collection_name": collection_name,
-                        "error": str(e)
-                    }
-                    zip_file.writestr(
-                        f"collections/{collection_name}_error.json",
-                        json.dumps(error_info, indent=2)
-                    )
+                    # Export each collection in batches
+                    for collection_name in collections:
+                        try:
+                            collection = db[collection_name]
+                            
+                            # Get document count first
+                            doc_count = collection.count_documents({})
+                            logger.info(f"Exporting collection: {collection_name} ({doc_count} documents)")
+                            
+                            # Process documents in batches to avoid memory issues
+                            all_documents = []
+                            skip = 0
+                            
+                            while True:
+                                # Fetch batch of documents
+                                batch = list(collection.find({}).skip(skip).limit(BATCH_SIZE))
+                                
+                                if not batch:
+                                    break
+                                
+                                # Convert ObjectIds in batch
+                                for doc in batch:
+                                    if '_id' in doc:
+                                        doc['_id'] = str(doc['_id'])
+                                    convert_objectids(doc)
+                                
+                                all_documents.extend(batch)
+                                skip += BATCH_SIZE
+                                
+                                # Log progress for large collections
+                                if doc_count > BATCH_SIZE and skip % (BATCH_SIZE * 10) == 0:
+                                    logger.info(f"  Progress: {skip}/{doc_count} documents processed for {collection_name}")
+                            
+                            # Write collection data to zip
+                            collection_data = {
+                                "collection_name": collection_name,
+                                "document_count": len(all_documents),
+                                "documents": all_documents
+                            }
+                            
+                            # Write in chunks if very large
+                            json_str = json.dumps(collection_data, indent=2, default=str)
+                            zip_file.writestr(
+                                f"collections/{collection_name}.json",
+                                json_str
+                            )
+                            
+                            logger.info(f"Exported collection: {collection_name} ({len(all_documents)} documents)")
+                            
+                            # Clear memory
+                            del all_documents
+                            
+                        except Exception as e:
+                            logger.error(f"Error exporting collection {collection_name}: {str(e)}", exc_info=True)
+                            # Continue with other collections even if one fails
+                            error_info = {
+                                "collection_name": collection_name,
+                                "error": str(e)
+                            }
+                            zip_file.writestr(
+                                f"collections/{collection_name}_error.json",
+                                json.dumps(error_info, indent=2)
+                            )
+                
+                # Prepare file for download
+                zip_buffer.seek(0)
+                yield zip_buffer.read()
+                
+            finally:
+                client.close()
+                zip_buffer.close()
         
-        client.close()
-        
-        # Prepare file for download
-        zip_buffer.seek(0)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"nse_data_backup_{timestamp}.zip"
         
-        logger.info(f"Backup created successfully: {filename} ({len(collections)} collections)")
+        logger.info(f"Starting backup creation: {filename} ({len(collections)} collections)")
         
-        return send_file(
-            zip_buffer,
+        # Stream the response
+        return Response(
+            stream_with_context(generate_backup()),
             mimetype='application/zip',
-            as_attachment=True,
-            download_name=filename
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Type': 'application/zip'
+            }
         )
         
     except Exception as e:
