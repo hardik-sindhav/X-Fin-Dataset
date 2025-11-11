@@ -735,12 +735,14 @@ function App() {
         case 'gainers':
           const [gainersStatusRes, gainersDataRes, gainersStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/gainers/status`),
-            axios.get(`${API_BASE}/gainers/data?page=${page}&limit=${limit}`),
+            axios.get(`${API_BASE}/gainers/data?page=${page}&limit=${limit}`, {
+              headers: { 'Authorization': `Bearer ${authToken}` }
+            }),
             axios.get(`${API_BASE}/gainers/stats`)
           ])
           setGainersStatus(gainersStatusRes.data)
-          setGainersData(gainersDataRes.data.data || [])
-          setGainersStats(gainersStatsRes.data.stats)
+          setGainersData(gainersDataRes.data?.data || [])
+          setGainersStats(gainersStatsRes.data?.stats || null)
           // Update pagination state
           setPagination(prev => ({
             ...prev,
@@ -757,12 +759,14 @@ function App() {
         case 'losers':
           const [losersStatusRes, losersDataRes, losersStatsRes] = await Promise.all([
             axios.get(`${API_BASE}/losers/status`),
-            axios.get(`${API_BASE}/losers/data?page=${page}&limit=${limit}`),
+            axios.get(`${API_BASE}/losers/data?page=${page}&limit=${limit}`, {
+              headers: { 'Authorization': `Bearer ${authToken}` }
+            }),
             axios.get(`${API_BASE}/losers/stats`)
           ])
           setLosersStatus(losersStatusRes.data)
-          setLosersData(losersDataRes.data.data || [])
-          setLosersStats(losersStatsRes.data.stats)
+          setLosersData(losersDataRes.data?.data || [])
+          setLosersStats(losersStatsRes.data?.stats || null)
           // Update pagination state
           setPagination(prev => ({
             ...prev,
@@ -847,15 +851,25 @@ function App() {
                 })
               ])
 
-              if (gainersFullRes.data.success) {
-                setHeatmapGainersData(gainersFullRes.data.data)
+              if (gainersFullRes.data.success && gainersFullRes.data.data) {
+                // Extract the actual data - could be in data.data or directly in data
+                const gainersRecord = gainersFullRes.data.data.data || gainersFullRes.data.data
+                setHeatmapGainersData(gainersRecord)
               }
-              if (losersFullRes.data.success) {
-                setHeatmapLosersData(losersFullRes.data.data)
+              if (losersFullRes.data.success && losersFullRes.data.data) {
+                // Extract the actual data - could be in data.data or directly in data
+                const losersRecord = losersFullRes.data.data.data || losersFullRes.data.data
+                setHeatmapLosersData(losersRecord)
               }
+            } else {
+              // No records found
+              setHeatmapGainersData(null)
+              setHeatmapLosersData(null)
             }
           } catch (error) {
             console.error('Error fetching heatmap data:', error)
+            setHeatmapGainersData(null)
+            setHeatmapLosersData(null)
           } finally {
             setHeatmapLoading(false)
           }
@@ -1323,7 +1337,9 @@ function App() {
   const handleGainersTrigger = async () => {
     setGainersTriggering(true)
     try {
-      const res = await axios.post(`${API_BASE}/gainers/trigger`)
+      const res = await axios.post(`${API_BASE}/gainers/trigger`, {}, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      })
       if (res.data.success) {
         alert('✅ Top 20 Gainers Data collection completed successfully!')
         setTimeout(() => fetchTabData('gainers', true), 2000)
@@ -1331,7 +1347,9 @@ function App() {
         alert('❌ Top 20 Gainers Data collection failed: ' + (res.data.error || res.data.message))
       }
     } catch (error) {
-      alert('❌ Error: ' + error.message)
+      const errorMsg = error.response?.data?.error || error.message || 'Unknown error'
+      alert('❌ Error: ' + errorMsg)
+      console.error('Gainers trigger error:', error)
     } finally {
       setGainersTriggering(false)
     }
@@ -1340,7 +1358,9 @@ function App() {
   const handleLosersTrigger = async () => {
     setLosersTriggering(true)
     try {
-      const res = await axios.post(`${API_BASE}/losers/trigger`)
+      const res = await axios.post(`${API_BASE}/losers/trigger`, {}, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      })
       if (res.data.success) {
         alert('✅ Top 20 Losers Data collection completed successfully!')
         setTimeout(() => fetchTabData('losers', true), 2000)
@@ -1348,7 +1368,9 @@ function App() {
         alert('❌ Top 20 Losers Data collection failed: ' + (res.data.error || res.data.message))
       }
     } catch (error) {
-      alert('❌ Error: ' + error.message)
+      const errorMsg = error.response?.data?.error || error.message || 'Unknown error'
+      alert('❌ Error: ' + errorMsg)
+      console.error('Losers trigger error:', error)
     } finally {
       setLosersTriggering(false)
     }
@@ -1397,7 +1419,23 @@ function App() {
 
   const formatDateTime = (isoString) => {
     if (!isoString) return 'Never'
-    return new Date(isoString).toLocaleString()
+    try {
+      const date = new Date(isoString)
+      if (isNaN(date.getTime())) return isoString
+      // Convert to IST (UTC+5:30)
+      return date.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      })
+    } catch (error) {
+      return isoString
+    }
   }
 
   const formatNumber = (value) => {
@@ -5161,6 +5199,9 @@ function App() {
                 <div className="empty-state">
                   <Database size={48} />
                   <p>No data available</p>
+                  <p style={{ marginTop: '10px', fontSize: '14px', color: '#666' }}>
+                    Click "Trigger Collection Now" to collect data
+                  </p>
                 </div>
               ) : (
                 <div className="table-container">
@@ -5301,6 +5342,9 @@ function App() {
                 <div className="empty-state">
                   <Database size={48} />
                   <p>No data available</p>
+                  <p style={{ marginTop: '10px', fontSize: '14px', color: '#666' }}>
+                    Click "Trigger Collection Now" to collect data
+                  </p>
                 </div>
               ) : (
                 <div className="table-container">
