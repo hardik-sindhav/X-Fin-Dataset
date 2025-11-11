@@ -48,8 +48,14 @@ def get_ist_now_naive() -> datetime:
     Get current datetime in IST but as naive datetime (for MongoDB compatibility)
     MongoDB stores datetimes, and this returns a datetime that represents IST time
     but without timezone info (for backward compatibility)
+    
+    Uses UTC time and converts to IST for reliability, regardless of system timezone
     """
-    return datetime.now(IST).replace(tzinfo=None)
+    # Get UTC time first, then convert to IST for reliability
+    utc_now = datetime.now(UTC)
+    ist_now = utc_now.astimezone(IST)
+    # Return as naive datetime (IST time without timezone info)
+    return ist_now.replace(tzinfo=None)
 
 def get_utc_now_naive() -> datetime:
     """
