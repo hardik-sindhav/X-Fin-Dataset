@@ -84,8 +84,14 @@ class NSEAllGainersLosersCollector:
             # Initialize collections for both gainers and losers
             for config in GAINERS_LOSERS:
                 collection = self.db[config["collection_name"]]
-                # Create unique index on timestamp to prevent duplicates
-                collection.create_index([("timestamp", 1)], unique=True)
+                # Create unique index on collectedAt to ensure each collection run creates a new record
+                # Also create non-unique index on timestamp for querying
+                try:
+                    collection.create_index([("collectedAt", 1)], unique=True)
+                    collection.create_index([("timestamp", 1)])  # Non-unique for querying
+                except Exception as e:
+                    # Index might already exist, that's okay
+                    logger.debug(f"Index creation note for {config['collection_name']}: {str(e)}")
                 self.collections[config["type"]] = collection
                 logger.debug(f"Initialized collection for {config['display_name']}: {config['collection_name']}")
             
@@ -178,7 +184,7 @@ class NSEAllGainersLosersCollector:
     def _save_to_mongo(self, data_type: str, data: Dict) -> bool:
         """
         Save entire response to MongoDB for a specific type
-        Uses timestamp field as unique identifier to prevent duplicates
+        Uses collectedAt field as unique identifier to ensure each collection run creates a new record
         Args:
             data_type: Type of data ("gainers" or "losers")
             data: Data dictionary to save
@@ -194,7 +200,7 @@ class NSEAllGainersLosersCollector:
                 logger.error(f"Collection not found for {data_type}")
                 return False
             
-            # Extract timestamp for duplicate check
+            # Extract timestamp from NSE API response
             # Use top-level timestamp if available, otherwise extract from sections
             timestamp = data.get('timestamp')
             if not timestamp:
@@ -211,33 +217,39 @@ class NSEAllGainersLosersCollector:
                 logger.error(f"Cannot save {data_type}: timestamp not found in data")
                 return False
             
-            # Use upsert with timestamp as unique identifier
+            # Use collectedAt (collection time) as unique identifier
+            # This ensures each collection run creates a new record, even if NSE timestamp is the same
+            collected_at = now_for_mongo()
+            collected_at_str = collected_at.isoformat()
+            
+            # Use upsert with collectedAt as unique identifier
             result = collection.update_one(
-                {"timestamp": timestamp},
+                {"collectedAt": collected_at},
                 {
                     "$set": {
                         **data,
-                        "updatedAt": now_for_mongo()
+                        "updatedAt": collected_at
                     },
                     "$setOnInsert": {
-                        "insertedAt": now_for_mongo()
+                        "insertedAt": collected_at,
+                        "collectedAt": collected_at
                     }
                 },
                 upsert=True
             )
             
             if result.upserted_id:
-                logger.debug(f"Inserted new {data_type} record with timestamp: {timestamp}")
+                logger.debug(f"Inserted new {data_type} record with collectedAt: {collected_at_str}, NSE timestamp: {timestamp}")
                 return True
             elif result.modified_count > 0:
-                logger.debug(f"Updated existing {data_type} record with timestamp: {timestamp}")
+                logger.debug(f"Updated existing {data_type} record with collectedAt: {collected_at_str}, NSE timestamp: {timestamp}")
                 return True
             else:
-                logger.debug(f"{data_type.capitalize()} record with timestamp {timestamp} already exists (no changes)")
+                logger.debug(f"{data_type.capitalize()} record with collectedAt {collected_at_str} already exists (no changes)")
                 return True  # Still considered successful if no duplicates
                 
         except pymongo.errors.DuplicateKeyError:
-            logger.debug(f"Duplicate {data_type} record skipped for timestamp: {timestamp}")
+            logger.debug(f"Duplicate {data_type} record skipped for collectedAt: {collected_at_str if 'collected_at_str' in locals() else 'unknown'}")
             return True  # Duplicate prevention working correctly
             
         except Exception as e:
@@ -288,7 +300,7 @@ class NSEAllGainersLosersCollector:
         Collect and save data for a single type (gainers or losers)
         Args:
             data_type: Type of data ("gainers" or "losers")
-        Returns: True if successful, False otherwise
+        Returns: True if successful (including duplicates), False only on critical errors
         """
         config = next((c for c in GAINERS_LOSERS if c["type"] == data_type), None)
         if not config:
@@ -304,21 +316,22 @@ class NSEAllGainersLosersCollector:
             data = self._fetch_data_with_retry(config["api_url"], data_type)
             
             if data is None:
-                logger.error(f"Failed to fetch {display_name} data after all retries")
+                logger.warning(f"Failed to fetch {display_name} data after all retries - will retry on next run")
                 return False
             
-            # Save to MongoDB
+            # Save to MongoDB (returns True even for duplicates)
             success = self._save_to_mongo(data_type, data)
             
             if success:
                 logger.debug(f"{display_name} data collection completed successfully")
             else:
-                logger.error(f"Failed to save {display_name} data to MongoDB")
+                logger.warning(f"Failed to save {display_name} data to MongoDB - will retry on next run")
             
             return success
             
         except Exception as e:
-            logger.error(f"Unexpected error collecting {display_name}: {str(e)}")
+            logger.error(f"Unexpected error collecting {display_name}: {str(e)}", exc_info=True)
+            # Return False but don't crash - scheduler will continue
             return False
     
     def get_collection(self, data_type: str):

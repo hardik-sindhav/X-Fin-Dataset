@@ -1,6 +1,6 @@
 """
 Cronjob Scheduler for NSE Top 20 Gainers Data Collector
-Runs Monday to Friday from 09:15 AM to 03:30 PM, every 3 minutes
+Runs Monday to Friday from 09:15 AM to 03:30 PM, every 10 minutes
 Collects data for top 20 gainers
 """
 
@@ -85,7 +85,7 @@ def run_collector():
     # Check minimum interval
     now_ist = get_ist_now()
     config = get_scheduler_config()
-    interval_minutes = config.get("interval_minutes", 3)
+    interval_minutes = config.get("interval_minutes", 10)
     min_interval_seconds = interval_minutes * 60 - 10  # Allow 10 seconds buffer
     
     collector = None
@@ -109,15 +109,22 @@ def run_collector():
         logger.debug("=" * 60)
         
         last_run_time = now_ist
-        collector = NSEAllGainersLosersCollector()
-        success = collector.collect_and_save_single("gainers")
-        
-        if success:
-            logger.debug("Top 20 Gainers Cronjob completed successfully")
-            overall_status = "success"
-        else:
-            logger.error("Top 20 Gainers Cronjob completed with errors")
-            overall_status = "failed"
+        collector = None
+        try:
+            collector = NSEAllGainersLosersCollector()
+            success = collector.collect_and_save_single("gainers")
+            
+            if success:
+                logger.debug("Top 20 Gainers Cronjob completed successfully")
+                overall_status = "success"
+            else:
+                logger.warning("Top 20 Gainers Cronjob completed with warnings (but continuing)")
+                overall_status = "failed"
+        except Exception as collector_error:
+            logger.error(f"Error in collector (continuing): {str(collector_error)}", exc_info=True)
+            success = False
+            overall_status = "error"
+            # Don't re-raise - let the scheduler continue
         
         # Update status file
         status_data = {
@@ -155,7 +162,7 @@ def run_collector():
 def main():
     """Setup and run the scheduler"""
     config = get_scheduler_config()
-    interval = config.get("interval_minutes", 3)
+    interval = config.get("interval_minutes", 10)
     start_time = config.get("start_time", "09:15")
     end_time = config.get("end_time", "15:30")
     enabled = config.get("enabled", True)
@@ -180,16 +187,19 @@ def main():
         logger.debug(f"Market is open. Running collector immediately at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
         run_collector()
     
-    # Keep the script running
-    try:
-        while True:
+    # Keep the script running - never stop even on errors
+    while True:
+        try:
             schedule.run_pending()
             # Sleep for 10 seconds for better timing accuracy
             time.sleep(10)
-    except KeyboardInterrupt:
-        logger.info("Scheduler stopped by user")
-    except Exception as e:
-        logger.error(f"Scheduler error: {str(e)}", exc_info=True)
+        except KeyboardInterrupt:
+            logger.info("Scheduler stopped by user")
+            break
+        except Exception as e:
+            logger.error(f"Scheduler error (continuing): {str(e)}", exc_info=True)
+            # Continue running even after errors - don't stop the scheduler
+            time.sleep(10)
 
 
 if __name__ == "__main__":
