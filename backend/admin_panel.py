@@ -3,11 +3,13 @@ Admin Panel for NSE FII/DII Data Collector
 Web interface to monitor cronjob status and view data
 """
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from bson import ObjectId
+import zipfile
+import io
 from nse_fiidii_collector import NSEDataCollector
 from nse_all_indices_option_chain_collector import NSEAllIndicesOptionChainCollector, INDICES
 from scheduler_config import (
@@ -631,6 +633,129 @@ def api_mongodb_health():
             "connected": False,
             "error": error_msg,
             "message": "MongoDB connection failed"
+        }), 500
+
+
+@app.route('/api/backup', methods=['GET'])
+@token_required
+@limiter.limit("2 per hour")  # Limit backup requests to prevent abuse
+def api_backup():
+    """API endpoint to create and download a backup of all MongoDB collections"""
+    try:
+        from pymongo import MongoClient
+        
+        # Get MongoDB configuration from environment variables
+        MONGO_HOST = os.getenv('MONGO_HOST', 'localhost')
+        MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
+        MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'nse_data')
+        MONGO_USERNAME = os.getenv('MONGO_USERNAME', None)
+        MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', None)
+        
+        # Build MongoDB URI
+        if MONGO_USERNAME and MONGO_PASSWORD:
+            encoded_username = quote_plus(MONGO_USERNAME)
+            encoded_password = quote_plus(MONGO_PASSWORD)
+            MONGO_AUTH_SOURCE = os.getenv('MONGO_AUTH_SOURCE', 'admin')
+            mongo_uri = f"mongodb://{encoded_username}:{encoded_password}@{MONGO_HOST}:{MONGO_PORT}/{MONGO_DB_NAME}?authSource={MONGO_AUTH_SOURCE}"
+        else:
+            mongo_uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
+        
+        # Connect to MongoDB
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=10000)
+        client.admin.command('ping')
+        db = client[MONGO_DB_NAME]
+        
+        # Get all collections
+        collections = db.list_collection_names()
+        
+        # Create in-memory zip file
+        zip_buffer = io.BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Create metadata file
+            metadata = {
+                "backup_date": datetime.now().isoformat(),
+                "database": MONGO_DB_NAME,
+                "collections": collections,
+                "total_collections": len(collections)
+            }
+            zip_file.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
+            
+            # Export each collection
+            for collection_name in collections:
+                try:
+                    collection = db[collection_name]
+                    # Get all documents from collection
+                    documents = list(collection.find({}))
+                    
+                    # Convert ObjectId to string for JSON serialization
+                    for doc in documents:
+                        if '_id' in doc:
+                            doc['_id'] = str(doc['_id'])
+                        # Convert any nested ObjectIds
+                        def convert_objectids(obj):
+                            if isinstance(obj, dict):
+                                for key, value in obj.items():
+                                    if isinstance(value, ObjectId):
+                                        obj[key] = str(value)
+                                    elif isinstance(value, dict):
+                                        convert_objectids(value)
+                                    elif isinstance(value, list):
+                                        for item in value:
+                                            convert_objectids(item)
+                            elif isinstance(obj, list):
+                                for item in obj:
+                                    convert_objectids(item)
+                        
+                        convert_objectids(doc)
+                    
+                    # Write collection data to zip
+                    collection_data = {
+                        "collection_name": collection_name,
+                        "document_count": len(documents),
+                        "documents": documents
+                    }
+                    zip_file.writestr(
+                        f"collections/{collection_name}.json",
+                        json.dumps(collection_data, indent=2, default=str)
+                    )
+                    
+                    logger.info(f"Exported collection: {collection_name} ({len(documents)} documents)")
+                    
+                except Exception as e:
+                    logger.error(f"Error exporting collection {collection_name}: {str(e)}")
+                    # Continue with other collections even if one fails
+                    error_info = {
+                        "collection_name": collection_name,
+                        "error": str(e)
+                    }
+                    zip_file.writestr(
+                        f"collections/{collection_name}_error.json",
+                        json.dumps(error_info, indent=2)
+                    )
+        
+        client.close()
+        
+        # Prepare file for download
+        zip_buffer.seek(0)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"nse_data_backup_{timestamp}.zip"
+        
+        logger.info(f"Backup created successfully: {filename} ({len(collections)} collections)")
+        
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        logger.error(f"Error creating backup: {str(e)}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to create backup"
         }), 500
 
 
