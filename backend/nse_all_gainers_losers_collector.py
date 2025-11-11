@@ -13,7 +13,6 @@ from typing import Optional, Dict, List
 import os
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
-from timezone_utils import now_for_mongo
 from logger_config import get_logger
 
 # Load environment variables
@@ -84,26 +83,13 @@ class NSEAllGainersLosersCollector:
             # Initialize collections for both gainers and losers
             for config in GAINERS_LOSERS:
                 collection = self.db[config["collection_name"]]
-                # Create unique index on collectedAt to ensure each collection run creates a new record
-                try:
-                    collection.create_index([("collectedAt", 1)], unique=True, background=True)
-                except Exception as e:
-                    # Index might already exist, that's okay
-                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
-                        logger.debug(f"Index creation note for {config['collection_name']}: {str(e)}")
-                
-                # Create non-unique index on timestamp for querying
-                try:
-                    collection.create_index([("timestamp", 1)], background=True)
-                except Exception as e:
-                    # Index might already exist, that's okay
-                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
-                        logger.debug(f"Timestamp index creation note for {config['collection_name']}: {str(e)}")
+                # Create unique index on timestamp to prevent duplicates (old working method)
+                collection.create_index([("timestamp", 1)], unique=True)
                 
                 self.collections[config["type"]] = collection
-                logger.debug(f"Initialized collection for {config['display_name']}: {config['collection_name']}")
+                logger.info(f"Successfully connected to MongoDB at {MONGO_HOST}:{MONGO_PORT}")
+                logger.info(f"Initialized collection for {config['display_name']}: {config['collection_name']}")
             
-            logger.debug(f"Successfully connected to MongoDB at {MONGO_HOST}:{MONGO_PORT}")
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {str(e)}")
             raise
@@ -131,7 +117,7 @@ class NSEAllGainersLosersCollector:
         
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                logger.debug(f"Fetching {display_name} data (Attempt {attempt}/{MAX_RETRIES})")
+                logger.info(f"Fetching {display_name} data (Attempt {attempt}/{MAX_RETRIES})")
                 
                 response = requests.get(api_url, headers=headers, timeout=30)
                 response.raise_for_status()
@@ -140,9 +126,9 @@ class NSEAllGainersLosersCollector:
                 
                 # Validate response structure
                 if not isinstance(data, dict):
-                    logger.warning(f"Unexpected data format for {data_type}: {type(data)}")
+                    logger.error(f"Unexpected data format for {data_type}: {type(data)}")
                     if attempt < MAX_RETRIES:
-                        logger.debug(f"Retrying in {RETRY_DELAY} seconds...")
+                        logger.info(f"Retrying in {RETRY_DELAY} seconds...")
                         time.sleep(RETRY_DELAY)
                         continue
                     return None
@@ -158,21 +144,21 @@ class NSEAllGainersLosersCollector:
                             break
                 
                 if not timestamp:
-                    logger.warning(f"Timestamp not found in {data_type} response")
+                    logger.error(f"Timestamp not found in {data_type} response")
                     if attempt < MAX_RETRIES:
-                        logger.debug(f"Retrying in {RETRY_DELAY} seconds...")
+                        logger.info(f"Retrying in {RETRY_DELAY} seconds...")
                         time.sleep(RETRY_DELAY)
                         continue
                     return None
                 
-                logger.debug(f"Successfully fetched {display_name} data. Timestamp: {timestamp}")
+                logger.info(f"Successfully fetched {display_name} data. Timestamp: {timestamp}")
                 
                 # Add top-level timestamp for easier querying
                 data['timestamp'] = timestamp
                 return data
                 
             except requests.exceptions.RequestException as e:
-                logger.warning(f"Request failed for {data_type} (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
+                logger.error(f"Request failed for {data_type} (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
                 if attempt < MAX_RETRIES:
                     logger.info(f"Retrying in {RETRY_DELAY} seconds...")
                     time.sleep(RETRY_DELAY)
@@ -180,7 +166,7 @@ class NSEAllGainersLosersCollector:
                     logger.error(f"All retry attempts failed for {data_type} data")
                     
             except Exception as e:
-                logger.warning(f"Unexpected error for {data_type} (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
+                logger.error(f"Unexpected error for {data_type} (Attempt {attempt}/{MAX_RETRIES}): {str(e)}")
                 if attempt < MAX_RETRIES:
                     logger.info(f"Retrying in {RETRY_DELAY} seconds...")
                     time.sleep(RETRY_DELAY)
@@ -192,7 +178,7 @@ class NSEAllGainersLosersCollector:
     def _save_to_mongo(self, data_type: str, data: Dict) -> bool:
         """
         Save entire response to MongoDB for a specific type
-        Uses collectedAt field as unique identifier to ensure each collection run creates a new record
+        Uses timestamp field as unique identifier to prevent duplicates (old working method)
         Args:
             data_type: Type of data ("gainers" or "losers")
             data: Data dictionary to save
@@ -208,7 +194,8 @@ class NSEAllGainersLosersCollector:
                 logger.error(f"Collection not found for {data_type}")
                 return False
             
-            # Extract timestamp from NSE API response
+            # Extract timestamp for duplicate check
+            # Use top-level timestamp if available, otherwise extract from sections
             timestamp = data.get('timestamp')
             if not timestamp:
                 # Try to get timestamp from first available section
@@ -224,43 +211,37 @@ class NSEAllGainersLosersCollector:
                 logger.error(f"Cannot save {data_type}: timestamp not found in data")
                 return False
             
-            # Use collectedAt (collection time) as unique identifier
-            # This ensures each collection run creates a new record, even if NSE timestamp is the same
-            collected_at = now_for_mongo()
-            
-            # Use upsert with collectedAt as unique identifier
+            # Use upsert with timestamp as unique identifier (old working method)
             result = collection.update_one(
-                {"collectedAt": collected_at},
+                {"timestamp": timestamp},
                 {
                     "$set": {
                         **data,
-                        "updatedAt": collected_at
+                        "updatedAt": datetime.utcnow()
                     },
                     "$setOnInsert": {
-                        "insertedAt": collected_at,
-                        "collectedAt": collected_at
+                        "insertedAt": datetime.utcnow()
                     }
                 },
                 upsert=True
             )
             
             if result.upserted_id:
-                logger.debug(f"Inserted new {data_type} record with collectedAt: {collected_at.isoformat()}, NSE timestamp: {timestamp}")
+                logger.info(f"Inserted new {data_type} record with timestamp: {timestamp}")
                 return True
             elif result.modified_count > 0:
-                logger.debug(f"Updated existing {data_type} record with collectedAt: {collected_at.isoformat()}, NSE timestamp: {timestamp}")
+                logger.info(f"Updated existing {data_type} record with timestamp: {timestamp}")
                 return True
             else:
-                logger.debug(f"{data_type.capitalize()} record with collectedAt {collected_at.isoformat()} already exists (no changes)")
+                logger.debug(f"{data_type.capitalize()} record with timestamp {timestamp} already exists (no changes)")
                 return True  # Still considered successful if no duplicates
                 
         except pymongo.errors.DuplicateKeyError:
-            logger.debug(f"Duplicate {data_type} record skipped")
+            logger.warning(f"Duplicate {data_type} record skipped for timestamp: {timestamp}")
             return True  # Duplicate prevention working correctly
             
         except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Failed to save {data_type} data to MongoDB: {error_msg}")
+            logger.error(f"Failed to save {data_type} data to MongoDB: {str(e)}")
             return False
     
     def collect_and_save_single(self, data_type: str) -> bool:
@@ -278,27 +259,27 @@ class NSEAllGainersLosersCollector:
         display_name = config["display_name"]
         
         try:
-            logger.debug(f"Starting {display_name} data collection...")
+            logger.info(f"Starting {display_name} data collection...")
             
             # Fetch data
             data = self._fetch_data_with_retry(config["api_url"], data_type)
             
             if data is None:
-                logger.warning(f"Failed to fetch {display_name} data after all retries")
+                logger.error(f"Failed to fetch {display_name} data after all retries")
                 return False
             
             # Save to MongoDB
             success = self._save_to_mongo(data_type, data)
             
             if success:
-                logger.debug(f"{display_name} data collection completed successfully")
+                logger.info(f"{display_name} data collection completed successfully")
             else:
-                logger.warning(f"Failed to save {display_name} data to MongoDB")
+                logger.error(f"Failed to save {display_name} data to MongoDB")
             
             return success
             
         except Exception as e:
-            logger.error(f"Unexpected error collecting {display_name}: {str(e)}", exc_info=True)
+            logger.error(f"Unexpected error in collect_and_save for {display_name}: {str(e)}")
             return False
     
     def get_collection(self, data_type: str):
@@ -314,7 +295,7 @@ class NSEAllGainersLosersCollector:
         """Close MongoDB connection"""
         if self.client:
             self.client.close()
-            logger.debug("MongoDB connection closed")
+            logger.info("MongoDB connection closed")
 
 
 def main():

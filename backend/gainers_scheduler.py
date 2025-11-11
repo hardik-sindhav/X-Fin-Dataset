@@ -79,7 +79,7 @@ def run_collector():
     
     # Check if already running (non-blocking check)
     if not execution_lock.acquire(blocking=False):
-        logger.debug("Collector is already running, skipping this execution")
+        logger.warning("Collector is already running, skipping this execution")
         return
     
     # Check minimum interval
@@ -94,29 +94,29 @@ def run_collector():
         if last_run_time:
             time_since_last_run = (now_ist - last_run_time).total_seconds()
             if time_since_last_run < min_interval_seconds:
-                logger.debug(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
+                logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
                 lock_acquired = False
                 return
         
         # Check if it's market hours before running
         if not is_market_hours(now_ist):
-            logger.debug(f"Outside market hours. Current time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Outside market hours. Current time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
             lock_acquired = False
             return
         
-        logger.debug("=" * 60)
-        logger.debug(f"Top 20 Gainers Cronjob triggered at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
-        logger.debug("=" * 60)
+        logger.info("=" * 60)
+        logger.info(f"Top 20 Gainers Cronjob triggered at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
+        logger.info("=" * 60)
         
         last_run_time = now_ist
         collector = NSEAllGainersLosersCollector()
         success = collector.collect_and_save_single("gainers")
         
         if success:
-            logger.debug("Top 20 Gainers Cronjob completed successfully")
+            logger.info("Top 20 Gainers Cronjob completed successfully")
             overall_status = "success"
         else:
-            logger.warning("Top 20 Gainers Cronjob completed with warnings")
+            logger.error("Top 20 Gainers Cronjob completed with errors")
             overall_status = "failed"
         
         # Update status file
@@ -149,7 +149,7 @@ def run_collector():
             collector.close()
         if lock_acquired:
             execution_lock.release()
-        logger.debug("=" * 60)
+        logger.info("=" * 60)
 
 
 def main():
@@ -161,8 +161,8 @@ def main():
     enabled = config.get("enabled", True)
     
     logger.info("Starting NSE Top 20 Gainers Data Collector Scheduler")
-    logger.debug(f"Schedule: Monday to Friday from {start_time} to {end_time}, every {interval} minutes")
-    logger.debug(f"Enabled: {enabled}")
+    logger.info(f"Schedule: Monday to Friday from {start_time} to {end_time}, every {interval} minutes")
+    logger.info(f"Enabled: {enabled}")
     
     if not enabled:
         logger.warning("Scheduler is disabled in configuration")
@@ -172,13 +172,7 @@ def main():
     # We'll check market hours and holidays inside the run_collector function
     schedule.every(interval).minutes.do(run_collector)
     
-    logger.debug("Scheduler configured. Waiting for scheduled times...")
-    
-    # Run immediately if within market hours (for testing and immediate execution)
-    now_ist = get_ist_now()
-    if is_market_hours(now_ist):
-        logger.debug(f"Market is open. Running collector immediately at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
-        run_collector()
+    logger.info("Scheduler configured. Waiting for scheduled times...")
     
     # Keep the script running
     try:
