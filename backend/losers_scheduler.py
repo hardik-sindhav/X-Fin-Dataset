@@ -89,19 +89,16 @@ def run_collector():
     min_interval_seconds = interval_minutes * 60 - 10  # Allow 10 seconds buffer
     
     collector = None
-    lock_acquired = True
     try:
         if last_run_time:
             time_since_last_run = (now_ist - last_run_time).total_seconds()
             if time_since_last_run < min_interval_seconds:
                 logger.debug(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
-                lock_acquired = False
                 return
         
         # Check if it's market hours before running
         if not is_market_hours(now_ist):
             logger.debug(f"Outside market hours. Current time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
-            lock_acquired = False
             return
         
         logger.debug("=" * 60)
@@ -147,8 +144,8 @@ def run_collector():
     finally:
         if collector:
             collector.close()
-        if lock_acquired:
-            execution_lock.release()
+        # Always release the lock, even if we returned early
+        execution_lock.release()
         logger.debug("=" * 60)
 
 
