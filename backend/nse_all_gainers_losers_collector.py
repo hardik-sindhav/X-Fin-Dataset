@@ -87,11 +87,21 @@ class NSEAllGainersLosersCollector:
                 # Create unique index on collectedAt to ensure each collection run creates a new record
                 # Also create non-unique index on timestamp for querying
                 try:
-                    collection.create_index([("collectedAt", 1)], unique=True)
-                    collection.create_index([("timestamp", 1)])  # Non-unique for querying
+                    # Create new unique index on collectedAt (background=True to avoid blocking)
+                    collection.create_index([("collectedAt", 1)], unique=True, background=True)
+                except Exception as e:
+                    # Index might already exist, that's okay - log and continue
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        logger.debug(f"Index creation note for {config['collection_name']}: {str(e)}")
+                
+                try:
+                    # Create non-unique index on timestamp for querying
+                    collection.create_index([("timestamp", 1)], background=True)
                 except Exception as e:
                     # Index might already exist, that's okay
-                    logger.debug(f"Index creation note for {config['collection_name']}: {str(e)}")
+                    if "already exists" not in str(e).lower() and "duplicate" not in str(e).lower():
+                        logger.debug(f"Timestamp index creation note for {config['collection_name']}: {str(e)}")
+                
                 self.collections[config["type"]] = collection
                 logger.debug(f"Initialized collection for {config['display_name']}: {config['collection_name']}")
             
