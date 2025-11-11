@@ -22,12 +22,14 @@ import {
   Settings as SettingsIcon,
   Trash2,
   Filter,
-  Calendar
+  Calendar,
+  Download
 } from 'lucide-react'
 import Login from './components/Login'
 import Settings from './components/Settings'
 import DetailView from './components/DetailView'
 import HeatmapView from './components/HeatmapView'
+import Backup from './components/Backup'
 import './App.css'
 
 import { API_BASE } from './config'
@@ -1627,6 +1629,16 @@ function App() {
             >
               <SettingsIcon size={20} />
               Settings
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'backup' ? 'active' : ''}`}
+              onClick={() => {
+                handleTabChange('backup')
+                setSidebarOpen(false)
+              }}
+            >
+              <Download size={20} />
+              Backup
             </li>
           </ul>
         </div>
@@ -5553,6 +5565,8 @@ function App() {
           </>
         ) : activeTab === 'settings' ? (
           <Settings authToken={authToken} />
+        ) : activeTab === 'backup' ? (
+          <Backup authToken={authToken} />
         ) : activeTab === 'livemint-news' ? (
           <>
             {/* LiveMint News Collector Status Card */}

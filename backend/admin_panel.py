@@ -3,11 +3,13 @@ Admin Panel for NSE FII/DII Data Collector
 Web interface to monitor cronjob status and view data
 """
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from bson import ObjectId
+import zipfile
+import io
 from nse_fiidii_collector import NSEDataCollector
 from nse_all_indices_option_chain_collector import NSEAllIndicesOptionChainCollector, INDICES
 from scheduler_config import (
@@ -283,16 +285,35 @@ def get_next_run_time():
     return None
 
 
-def format_datetime_for_json(dt):
-    """Format datetime to ISO string with UTC timezone marker"""
+def format_datetime_for_json(dt, is_utc=False):
+    """
+    Format datetime to ISO string with appropriate timezone marker
+    - If datetime has timezone info, return as-is
+    - If datetime is naive:
+      * If is_utc=True: append 'Z' (for UTC times like gainers/losers)
+      * If is_utc=False: append '+05:30' (for IST times from now_for_mongo())
+    Args:
+        dt: datetime object to format
+        is_utc: If True, treat naive datetime as UTC. If False, treat as IST.
+    """
     if not dt:
         return None
+    
+    # If datetime has timezone info, return as-is
+    if dt.tzinfo is not None:
+        return dt.isoformat()
+    
     iso_str = dt.isoformat()
-    # If datetime is naive (no timezone), append 'Z' to mark as UTC
-    # If it already has timezone info, return as-is
-    if not iso_str.endswith('Z') and '+' not in iso_str[-6:]:
-        return iso_str + 'Z'
-    return iso_str
+    
+    # Check if it already has timezone marker
+    if iso_str.endswith('Z') or '+' in iso_str[-6:] or iso_str.endswith('-05:30') or iso_str.endswith('-06:00'):
+        return iso_str
+    
+    # For naive datetime, use is_utc parameter to determine timezone
+    if is_utc:
+        return iso_str + 'Z'  # UTC
+    else:
+        return iso_str + '+05:30'  # IST (default for now_for_mongo())
 
 def check_scheduler_running(scheduler_file='cronjob_scheduler.py'):
     """Check if scheduler process is running"""
@@ -612,6 +633,129 @@ def api_mongodb_health():
             "connected": False,
             "error": error_msg,
             "message": "MongoDB connection failed"
+        }), 500
+
+
+@app.route('/api/backup', methods=['GET'])
+@token_required
+@limiter.limit("2 per hour")  # Limit backup requests to prevent abuse
+def api_backup():
+    """API endpoint to create and download a backup of all MongoDB collections"""
+    try:
+        from pymongo import MongoClient
+        
+        # Get MongoDB configuration from environment variables
+        MONGO_HOST = os.getenv('MONGO_HOST', 'localhost')
+        MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
+        MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'nse_data')
+        MONGO_USERNAME = os.getenv('MONGO_USERNAME', None)
+        MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', None)
+        
+        # Build MongoDB URI
+        if MONGO_USERNAME and MONGO_PASSWORD:
+            encoded_username = quote_plus(MONGO_USERNAME)
+            encoded_password = quote_plus(MONGO_PASSWORD)
+            MONGO_AUTH_SOURCE = os.getenv('MONGO_AUTH_SOURCE', 'admin')
+            mongo_uri = f"mongodb://{encoded_username}:{encoded_password}@{MONGO_HOST}:{MONGO_PORT}/{MONGO_DB_NAME}?authSource={MONGO_AUTH_SOURCE}"
+        else:
+            mongo_uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
+        
+        # Connect to MongoDB
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=10000)
+        client.admin.command('ping')
+        db = client[MONGO_DB_NAME]
+        
+        # Get all collections
+        collections = db.list_collection_names()
+        
+        # Create in-memory zip file
+        zip_buffer = io.BytesIO()
+        
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            # Create metadata file
+            metadata = {
+                "backup_date": datetime.now().isoformat(),
+                "database": MONGO_DB_NAME,
+                "collections": collections,
+                "total_collections": len(collections)
+            }
+            zip_file.writestr("backup_metadata.json", json.dumps(metadata, indent=2))
+            
+            # Export each collection
+            for collection_name in collections:
+                try:
+                    collection = db[collection_name]
+                    # Get all documents from collection
+                    documents = list(collection.find({}))
+                    
+                    # Convert ObjectId to string for JSON serialization
+                    for doc in documents:
+                        if '_id' in doc:
+                            doc['_id'] = str(doc['_id'])
+                        # Convert any nested ObjectIds
+                        def convert_objectids(obj):
+                            if isinstance(obj, dict):
+                                for key, value in obj.items():
+                                    if isinstance(value, ObjectId):
+                                        obj[key] = str(value)
+                                    elif isinstance(value, dict):
+                                        convert_objectids(value)
+                                    elif isinstance(value, list):
+                                        for item in value:
+                                            convert_objectids(item)
+                            elif isinstance(obj, list):
+                                for item in obj:
+                                    convert_objectids(item)
+                        
+                        convert_objectids(doc)
+                    
+                    # Write collection data to zip
+                    collection_data = {
+                        "collection_name": collection_name,
+                        "document_count": len(documents),
+                        "documents": documents
+                    }
+                    zip_file.writestr(
+                        f"collections/{collection_name}.json",
+                        json.dumps(collection_data, indent=2, default=str)
+                    )
+                    
+                    logger.info(f"Exported collection: {collection_name} ({len(documents)} documents)")
+                    
+                except Exception as e:
+                    logger.error(f"Error exporting collection {collection_name}: {str(e)}")
+                    # Continue with other collections even if one fails
+                    error_info = {
+                        "collection_name": collection_name,
+                        "error": str(e)
+                    }
+                    zip_file.writestr(
+                        f"collections/{collection_name}_error.json",
+                        json.dumps(error_info, indent=2)
+                    )
+        
+        client.close()
+        
+        # Prepare file for download
+        zip_buffer.seek(0)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"nse_data_backup_{timestamp}.zip"
+        
+        logger.info(f"Backup created successfully: {filename} ({len(collections)} collections)")
+        
+        return send_file(
+            zip_buffer,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        logger.error(f"Error creating backup: {str(e)}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to create backup"
         }), 500
 
 
@@ -1966,8 +2110,8 @@ def api_midcpnifty_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -2315,8 +2459,8 @@ def api_hdfcbank_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -2598,8 +2742,8 @@ def api_icicibank_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -2889,8 +3033,8 @@ def api_sbin_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -3180,8 +3324,8 @@ def api_kotakbank_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -3471,8 +3615,8 @@ def api_axisbank_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -3762,8 +3906,8 @@ def api_bankbaroda_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -4053,8 +4197,8 @@ def api_pnb_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -4344,8 +4488,8 @@ def api_canbk_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -4635,8 +4779,8 @@ def api_aubank_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -4926,8 +5070,8 @@ def api_indusindbk_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -5217,8 +5361,8 @@ def api_idfcfirstb_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -5508,8 +5652,8 @@ def api_federalbnk_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -5865,8 +6009,8 @@ def api_gainers_data():
                 "banknifty_count": banknifty_count,
                 "legends": record.get("legends", []),
                 "data": {k: (str(v) if isinstance(v, ObjectId) else v) for k, v in record.items()},  # Keep full data for detail view (with ObjectId converted)
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -6021,8 +6165,8 @@ def api_gainers_data_by_id(record_id):
                 "FOSec": record.get("FOSec", {}),
                 "legends": record.get("legends", []),
                 "data": record_data,  # Keep full data (with ObjectId converted)
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             
             return jsonify({
@@ -6209,8 +6353,8 @@ def api_losers_data():
                 "banknifty_count": banknifty_count,
                 "legends": record.get("legends", []),
                 "data": {k: (str(v) if isinstance(v, ObjectId) else v) for k, v in record.items()},  # Keep full data for detail view (with ObjectId converted)
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             data.append(record_dict)
         
@@ -6360,8 +6504,8 @@ def api_losers_data_by_id(record_id):
                 "FOSec": record.get("FOSec", {}),
                 "legends": record.get("legends", []),
                 "data": {k: (str(v) if isinstance(v, ObjectId) else v) for k, v in record.items()},  # Keep full data (with ObjectId converted)
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
             
             return jsonify({
