@@ -100,10 +100,10 @@ class SchedulerConfigSchema(Schema):
     """Schema for scheduler configuration updates"""
     scheduler_type = fields.Str(
         required=True,
-        validate=validate.OneOf(['banks', 'indices', 'gainers_losers', 'gainers', 'losers', 'news', 'fiidii']),
+        validate=validate.OneOf(['banks', 'indices', 'gainers', 'losers', 'news', 'fiidii']),
         error_messages={
             'required': 'scheduler_type is required',
-            'invalid': 'scheduler_type must be one of: banks, indices, gainers_losers, gainers, losers, news, fiidii'
+            'invalid': 'scheduler_type must be one of: banks, indices, gainers, losers, news, fiidii'
         }
     )
     config = fields.Dict(

@@ -1,7 +1,6 @@
 """
-NSE All Gainers and Losers Data Collector
-Collects data from NSE API for both gainers and losers and stores in MongoDB
-Runs Monday to Friday from 09:15 AM to 03:30 PM, every 3 minutes
+NSE Gainers and Losers Data Collector
+Collects data from NSE API for gainers and losers and stores in MongoDB
 """
 
 import requests
@@ -9,7 +8,7 @@ import pymongo
 from pymongo import MongoClient
 from datetime import datetime
 import time
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 import os
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
@@ -27,22 +26,6 @@ LOSERS_API_URL = "https://www.nseindia.com/api/live-analysis-variations?index=lo
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # seconds
 
-# Define gainers and losers configuration
-GAINERS_LOSERS = [
-    {
-        "type": "gainers",
-        "api_url": GAINERS_API_URL,
-        "collection_name": os.getenv('MONGO_GAINERS_COLLECTION_NAME', 'gainers_data'),
-        "display_name": "Top 20 Gainers"
-    },
-    {
-        "type": "losers",
-        "api_url": LOSERS_API_URL,
-        "collection_name": os.getenv('MONGO_LOSERS_COLLECTION_NAME', 'losers_data'),
-        "display_name": "Top 20 Losers"
-    }
-]
-
 # MongoDB Configuration (can be overridden by environment variables)
 MONGO_HOST = os.getenv('MONGO_HOST', 'localhost')
 MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
@@ -50,27 +33,30 @@ MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'nse_data')
 MONGO_USERNAME = os.getenv('MONGO_USERNAME', None)
 MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', None)
 
+# Collection names
+MONGO_GAINERS_COLLECTION_NAME = os.getenv('MONGO_GAINERS_COLLECTION_NAME', 'gainers_data')
+MONGO_LOSERS_COLLECTION_NAME = os.getenv('MONGO_LOSERS_COLLECTION_NAME', 'losers_data')
 
-class NSEAllGainersLosersCollector:
-    """Collects and stores NSE Top 20 Gainers and Losers data in MongoDB"""
+
+class NSEGainersLosersCollector:
+    """Collects and stores NSE Gainers and Losers data in MongoDB"""
     
     def __init__(self):
-        """Initialize MongoDB connections for both gainers and losers"""
+        """Initialize MongoDB connection"""
         self.client = None
         self.db = None
-        self.collections = {}  # Dictionary to store collections: {"gainers": collection, "losers": collection}
+        self.gainers_collection = None
+        self.losers_collection = None
         self._connect_mongo()
     
     def _connect_mongo(self):
         """Establish MongoDB connection with error handling"""
         try:
             if MONGO_USERNAME and MONGO_PASSWORD:
-                # URL-encode username and password to handle special characters like @, :, etc.
+                # URL-encode username and password to handle special characters
                 encoded_username = quote_plus(MONGO_USERNAME)
                 encoded_password = quote_plus(MONGO_PASSWORD)
-                # Get auth source (default to 'admin' for MongoDB) - REQUIRED for authentication
                 MONGO_AUTH_SOURCE = os.getenv('MONGO_AUTH_SOURCE', 'admin')
-                # Build connection string with authSource parameter (required for MongoDB auth)
                 mongo_uri = f"mongodb://{encoded_username}:{encoded_password}@{MONGO_HOST}:{MONGO_PORT}/{MONGO_DB_NAME}?authSource={MONGO_AUTH_SOURCE}"
             else:
                 mongo_uri = f"mongodb://{MONGO_HOST}:{MONGO_PORT}/"
@@ -80,16 +66,24 @@ class NSEAllGainersLosersCollector:
             self.client.admin.command('ping')
             self.db = self.client[MONGO_DB_NAME]
             
-            # Initialize collections for both gainers and losers
-            for config in GAINERS_LOSERS:
-                collection = self.db[config["collection_name"]]
-                # Create unique index on timestamp to prevent duplicates (old working method)
-                collection.create_index([("timestamp", 1)], unique=True)
-                
-                self.collections[config["type"]] = collection
-                logger.info(f"Successfully connected to MongoDB at {MONGO_HOST}:{MONGO_PORT}")
-                logger.info(f"Initialized collection for {config['display_name']}: {config['collection_name']}")
+            # Initialize collections
+            self.gainers_collection = self.db[MONGO_GAINERS_COLLECTION_NAME]
+            self.losers_collection = self.db[MONGO_LOSERS_COLLECTION_NAME]
             
+            # Create unique index on timestamp to prevent duplicates
+            try:
+                self.gainers_collection.create_index([("timestamp", 1)], unique=True)
+            except Exception as e:
+                if "already exists" not in str(e).lower():
+                    logger.debug(f"Gainers index creation note: {str(e)}")
+            
+            try:
+                self.losers_collection.create_index([("timestamp", 1)], unique=True)
+            except Exception as e:
+                if "already exists" not in str(e).lower():
+                    logger.debug(f"Losers index creation note: {str(e)}")
+            
+            logger.info(f"Successfully connected to MongoDB at {MONGO_HOST}:{MONGO_PORT}")
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {str(e)}")
             raise
@@ -113,11 +107,10 @@ class NSEAllGainersLosersCollector:
         Returns: Full API response as dict or None if all retries fail
         """
         headers = self._get_headers()
-        display_name = next((c["display_name"] for c in GAINERS_LOSERS if c["type"] == data_type), data_type)
         
         for attempt in range(1, MAX_RETRIES + 1):
             try:
-                logger.info(f"Fetching {display_name} data (Attempt {attempt}/{MAX_RETRIES})")
+                logger.info(f"Fetching {data_type} data (Attempt {attempt}/{MAX_RETRIES})")
                 
                 response = requests.get(api_url, headers=headers, timeout=30)
                 response.raise_for_status()
@@ -134,7 +127,6 @@ class NSEAllGainersLosersCollector:
                     return None
                 
                 # Check if we have at least one timestamp in the response
-                # Try to get timestamp from first available section
                 timestamp = None
                 for key in ['NIFTY', 'BANKNIFTY', 'NIFTYNEXT50', 'allSec', 'FOSec']:
                     if key in data and isinstance(data[key], dict):
@@ -151,7 +143,7 @@ class NSEAllGainersLosersCollector:
                         continue
                     return None
                 
-                logger.info(f"Successfully fetched {display_name} data. Timestamp: {timestamp}")
+                logger.info(f"Successfully fetched {data_type} data. Timestamp: {timestamp}")
                 
                 # Add top-level timestamp for easier querying
                 data['timestamp'] = timestamp
@@ -177,8 +169,8 @@ class NSEAllGainersLosersCollector:
     
     def _save_to_mongo(self, data_type: str, data: Dict) -> bool:
         """
-        Save entire response to MongoDB for a specific type
-        Uses timestamp field as unique identifier to prevent duplicates (old working method)
+        Save entire response to MongoDB
+        Uses timestamp field as unique identifier to prevent duplicates
         Args:
             data_type: Type of data ("gainers" or "losers")
             data: Data dictionary to save
@@ -189,13 +181,16 @@ class NSEAllGainersLosersCollector:
             return False
         
         try:
-            collection = self.collections.get(data_type)
-            if collection is None:
-                logger.error(f"Collection not found for {data_type}")
+            # Select collection based on data type
+            if data_type == "gainers":
+                collection = self.gainers_collection
+            elif data_type == "losers":
+                collection = self.losers_collection
+            else:
+                logger.error(f"Invalid data type: {data_type}")
                 return False
             
             # Extract timestamp for duplicate check
-            # Use top-level timestamp if available, otherwise extract from sections
             timestamp = data.get('timestamp')
             if not timestamp:
                 # Try to get timestamp from first available section
@@ -204,14 +199,14 @@ class NSEAllGainersLosersCollector:
                         section_timestamp = data[key].get('timestamp')
                         if section_timestamp:
                             timestamp = section_timestamp
-                            data['timestamp'] = timestamp  # Add to top level for consistency
+                            data['timestamp'] = timestamp
                             break
             
             if not timestamp:
                 logger.error(f"Cannot save {data_type}: timestamp not found in data")
                 return False
             
-            # Use upsert with timestamp as unique identifier (old working method)
+            # Use upsert with timestamp as unique identifier
             result = collection.update_one(
                 {"timestamp": timestamp},
                 {
@@ -234,11 +229,11 @@ class NSEAllGainersLosersCollector:
                 return True
             else:
                 logger.debug(f"{data_type.capitalize()} record with timestamp {timestamp} already exists (no changes)")
-                return True  # Still considered successful if no duplicates
+                return True
                 
         except pymongo.errors.DuplicateKeyError:
             logger.warning(f"Duplicate {data_type} record skipped for timestamp: {timestamp}")
-            return True  # Duplicate prevention working correctly
+            return True
             
         except Exception as e:
             logger.error(f"Failed to save {data_type} data to MongoDB: {str(e)}")
@@ -251,18 +246,21 @@ class NSEAllGainersLosersCollector:
             data_type: Type of data ("gainers" or "losers")
         Returns: True if successful, False otherwise
         """
-        config = next((c for c in GAINERS_LOSERS if c["type"] == data_type), None)
-        if not config:
-            logger.error(f"Invalid data type: {data_type}")
-            return False
-        
-        display_name = config["display_name"]
-        
         try:
+            if data_type == "gainers":
+                api_url = GAINERS_API_URL
+                display_name = "Top 20 Gainers"
+            elif data_type == "losers":
+                api_url = LOSERS_API_URL
+                display_name = "Top 20 Losers"
+            else:
+                logger.error(f"Invalid data type: {data_type}")
+                return False
+            
             logger.info(f"Starting {display_name} data collection...")
             
             # Fetch data
-            data = self._fetch_data_with_retry(config["api_url"], data_type)
+            data = self._fetch_data_with_retry(api_url, data_type)
             
             if data is None:
                 logger.error(f"Failed to fetch {display_name} data after all retries")
@@ -279,7 +277,7 @@ class NSEAllGainersLosersCollector:
             return success
             
         except Exception as e:
-            logger.error(f"Unexpected error in collect_and_save for {display_name}: {str(e)}")
+            logger.error(f"Unexpected error in collect_and_save_single for {data_type}: {str(e)}", exc_info=True)
             return False
     
     def get_collection(self, data_type: str):
@@ -289,7 +287,11 @@ class NSEAllGainersLosersCollector:
             data_type: Type of data ("gainers" or "losers")
         Returns: MongoDB collection object or None
         """
-        return self.collections.get(data_type)
+        if data_type == "gainers":
+            return self.gainers_collection
+        elif data_type == "losers":
+            return self.losers_collection
+        return None
     
     def close(self):
         """Close MongoDB connection"""
@@ -302,7 +304,7 @@ def main():
     """Main execution function"""
     collector = None
     try:
-        collector = NSEAllGainersLosersCollector()
+        collector = NSEGainersLosersCollector()
         # Collect both gainers and losers
         gainers_success = collector.collect_and_save_single("gainers")
         losers_success = collector.collect_and_save_single("losers")
@@ -319,3 +321,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

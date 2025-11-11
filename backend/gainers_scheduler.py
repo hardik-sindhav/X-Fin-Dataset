@@ -7,7 +7,7 @@ Collects data for top 20 gainers
 import schedule
 import time
 import threading
-from nse_all_gainers_losers_collector import NSEAllGainersLosersCollector
+from nse_gainers_losers_collector import NSEGainersLosersCollector
 from datetime import datetime, time as dt_time, timedelta, date, timezone
 from scheduler_config import get_config_for_scheduler, is_holiday
 from timezone_utils import get_ist_now, now_for_mongo
@@ -79,7 +79,7 @@ def run_collector():
     
     # Check if already running (non-blocking check)
     if not execution_lock.acquire(blocking=False):
-        logger.warning("Collector is already running, skipping this execution")
+        logger.debug("Collector is already running, skipping this execution")
         return
     
     # Check minimum interval
@@ -94,26 +94,26 @@ def run_collector():
         if last_run_time:
             time_since_last_run = (now_ist - last_run_time).total_seconds()
             if time_since_last_run < min_interval_seconds:
-                logger.info(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
+                logger.debug(f"Skipping execution - only {time_since_last_run:.1f}s since last run (min {min_interval_seconds}s)")
                 lock_acquired = False
                 return
         
         # Check if it's market hours before running
         if not is_market_hours(now_ist):
-            logger.info(f"Outside market hours. Current time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.debug(f"Outside market hours. Current time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
             lock_acquired = False
             return
         
-        logger.info("=" * 60)
-        logger.info(f"Top 20 Gainers Cronjob triggered at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
-        logger.info("=" * 60)
+        logger.debug("=" * 60)
+        logger.debug(f"Top 20 Gainers Cronjob triggered at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
+        logger.debug("=" * 60)
         
         last_run_time = now_ist
-        collector = NSEAllGainersLosersCollector()
+        collector = NSEGainersLosersCollector()
         success = collector.collect_and_save_single("gainers")
         
         if success:
-            logger.info("Top 20 Gainers Cronjob completed successfully")
+            logger.debug("Top 20 Gainers Cronjob completed successfully")
             overall_status = "success"
         else:
             logger.error("Top 20 Gainers Cronjob completed with errors")
@@ -149,7 +149,7 @@ def run_collector():
             collector.close()
         if lock_acquired:
             execution_lock.release()
-        logger.info("=" * 60)
+        logger.debug("=" * 60)
 
 
 def main():
@@ -161,8 +161,8 @@ def main():
     enabled = config.get("enabled", True)
     
     logger.info("Starting NSE Top 20 Gainers Data Collector Scheduler")
-    logger.info(f"Schedule: Monday to Friday from {start_time} to {end_time}, every {interval} minutes")
-    logger.info(f"Enabled: {enabled}")
+    logger.debug(f"Schedule: Monday to Friday from {start_time} to {end_time}, every {interval} minutes")
+    logger.debug(f"Enabled: {enabled}")
     
     if not enabled:
         logger.warning("Scheduler is disabled in configuration")
@@ -172,7 +172,13 @@ def main():
     # We'll check market hours and holidays inside the run_collector function
     schedule.every(interval).minutes.do(run_collector)
     
-    logger.info("Scheduler configured. Waiting for scheduled times...")
+    logger.debug("Scheduler configured. Waiting for scheduled times...")
+    
+    # Run immediately if within market hours (for testing and immediate execution)
+    now_ist = get_ist_now()
+    if is_market_hours(now_ist):
+        logger.debug(f"Market is open. Running collector immediately at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
+        run_collector()
     
     # Keep the script running
     try:
@@ -188,3 +194,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
