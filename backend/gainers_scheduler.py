@@ -109,24 +109,15 @@ def run_collector():
         logger.debug("=" * 60)
         
         last_run_time = now_ist
-        collector = None
+        collector = NSEAllGainersLosersCollector()
+        success = collector.collect_and_save_single("gainers")
         
-        # Wrap collector initialization and execution in try-except to prevent crashes
-        try:
-            collector = NSEAllGainersLosersCollector()
-            success = collector.collect_and_save_single("gainers")
-            
-            if success:
-                logger.debug("Top 20 Gainers Cronjob completed successfully")
-                overall_status = "success"
-            else:
-                logger.warning("Top 20 Gainers Cronjob completed with warnings")
-                overall_status = "failed"
-        except Exception as collector_ex:
-            logger.error(f"Error in collector execution: {str(collector_ex)}", exc_info=True)
-            success = False
-            overall_status = "error"
-            # Don't re-raise - let the scheduler continue
+        if success:
+            logger.debug("Top 20 Gainers Cronjob completed successfully")
+            overall_status = "success"
+        else:
+            logger.warning("Top 20 Gainers Cronjob completed with warnings")
+            overall_status = "failed"
         
         # Update status file
         status_data = {
@@ -189,22 +180,17 @@ def main():
         logger.debug(f"Market is open. Running collector immediately at {now_ist.strftime('%Y-%m-%d %H:%M:%S')} IST")
         run_collector()
     
-    # Keep the script running - never exit even on errors
-    logger.info("Scheduler main loop started. Will run continuously.")
-    while True:
-        try:
+    # Keep the script running
+    try:
+        while True:
             schedule.run_pending()
             # Sleep for 10 seconds for better timing accuracy
             time.sleep(10)
-        except KeyboardInterrupt:
-            logger.info("Scheduler stopped by user")
-            break
-        except Exception as e:
-            logger.error(f"Scheduler error (continuing): {str(e)}", exc_info=True)
-            # Continue running even after errors - don't stop the scheduler
-            time.sleep(10)
+    except KeyboardInterrupt:
+        logger.info("Scheduler stopped by user")
+    except Exception as e:
+        logger.error(f"Scheduler error: {str(e)}", exc_info=True)
 
 
 if __name__ == "__main__":
     main()
-
