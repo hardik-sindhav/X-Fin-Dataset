@@ -15,7 +15,7 @@ from scheduler_config import (
     get_holidays, add_holiday, remove_holiday, is_holiday
 )
 from nse_all_banks_option_chain_collector import NSEAllBanksOptionChainCollector, BANKS
-from nse_all_gainers_losers_collector import NSEAllGainersLosersCollector, GAINERS_LOSERS
+from nse_all_gainers_losers_collector import NSEAllGainersLosersCollector
 from nse_news_collector import NSENewsCollector
 from nse_livemint_news_collector import NSELiveMintNewsCollector
 
@@ -216,7 +216,6 @@ if ADMIN_PASSWORD:
 STATUS_FILE = 'scheduler_status.json'
 ALL_INDICES_STATUS_FILE = 'all_indices_option_chain_scheduler_status.json'
 ALL_BANKS_STATUS_FILE = 'all_banks_option_chain_scheduler_status.json'
-ALL_GAINERS_LOSERS_STATUS_FILE = 'all_gainers_losers_scheduler_status.json'
 NEWS_COLLECTOR_STATUS_FILE = 'news_collector_scheduler_status.json'
 LIVEMINT_NEWS_STATUS_FILE = 'livemint_news_scheduler_status.json'
 
@@ -829,7 +828,7 @@ def api_trigger():
 def get_interval_scheduler_next_run_time(scheduler_type):
     """
     Calculate next scheduled run time for interval-based schedulers using config
-    scheduler_type: 'indices', 'banks', 'gainers_losers', 'news'
+    scheduler_type: 'indices', 'banks', 'gainers_losers', 'gainers', 'losers', 'news'
     """
     from scheduler_config import get_config_for_scheduler
     config = get_config_for_scheduler(scheduler_type)
@@ -2223,10 +2222,16 @@ def get_index_collection(symbol: str):
 
 
 # Helper function to get collection for gainers or losers
-def get_gainers_losers_collection(data_type: str):
-    """Get MongoDB collection for gainers or losers"""
+def get_gainers_collection():
+    """Get MongoDB collection for gainers"""
     collector = NSEAllGainersLosersCollector()
-    collection = collector.get_collection(data_type)
+    collection = collector.get_collection("gainers")
+    return collector, collection
+
+def get_losers_collection():
+    """Get MongoDB collection for losers"""
+    collector = NSEAllGainersLosersCollector()
+    collection = collector.get_collection("losers")
     return collector, collection
 
 
@@ -5695,16 +5700,11 @@ def api_federalbnk_data_by_id(record_id):
 
 def get_gainers_next_run_time():
     """Calculate next scheduled run time for gainers using config"""
-    return get_interval_scheduler_next_run_time("gainers_losers")
+    return get_interval_scheduler_next_run_time("gainers")
 
 
-def get_all_gainers_losers_next_run_time():
-    """Calculate next scheduled run time for all gainers/losers using config"""
-    return get_interval_scheduler_next_run_time("gainers_losers")
-
-
-def get_all_gainers_losers_status():
-    """Get all gainers/losers scheduler status from file or calculate"""
+def get_gainers_status():
+    """Get gainers status from separate scheduler status file"""
     status = {
         "running": False,
         "pid": None,
@@ -5714,24 +5714,26 @@ def get_all_gainers_losers_status():
     }
     
     # Check if process is running
-    is_running, pid = check_scheduler_running('all_gainers_losers_scheduler.py')
+    is_running, pid = check_scheduler_running('gainers_scheduler.py')
     status["running"] = is_running
     status["pid"] = pid
     
     # Get next run time
     try:
-        next_run = get_all_gainers_losers_next_run_time()
+        next_run = get_gainers_next_run_time()
         status["next_run"] = next_run.isoformat() if next_run else None
     except Exception as e:
         status["next_run"] = None
     
     # Try to read status file
-    if os.path.exists(ALL_GAINERS_LOSERS_STATUS_FILE):
+    status_file = 'gainers_scheduler_status.json'
+    if os.path.exists(status_file):
         try:
-            with open(ALL_GAINERS_LOSERS_STATUS_FILE, 'r') as f:
+            with open(status_file, 'r') as f:
                 file_status = json.load(f)
                 status["last_run"] = file_status.get("last_run")
                 status["last_status"] = file_status.get("last_status", "unknown")
+                status["success"] = file_status.get("success", None)
         except Exception as e:
             pass
     
@@ -5739,22 +5741,6 @@ def get_all_gainers_losers_status():
     if not status["running"] and not status["last_run"]:
         status["last_status"] = "not_started"
     
-    return status
-
-
-def get_gainers_status():
-    """Get gainers status from unified status file"""
-    status = get_all_gainers_losers_status()
-    # Extract gainers-specific result if available
-    if os.path.exists(ALL_GAINERS_LOSERS_STATUS_FILE):
-        try:
-            with open(ALL_GAINERS_LOSERS_STATUS_FILE, 'r') as f:
-                file_status = json.load(f)
-                results = file_status.get("results", {})
-                if "gainers" in results:
-                    status["gainers_success"] = results.get("gainers", False)
-        except:
-            pass
     return status
 
 
@@ -5788,7 +5774,7 @@ def api_gainers_data():
         
         skip = (page - 1) * limit
         
-        collector, collection = get_gainers_losers_collection("gainers")
+        collector, collection = get_gainers_collection()
         if collection is None:
             collector.close()
             return jsonify({
@@ -5851,7 +5837,7 @@ def api_gainers_data():
 def api_gainers_stats():
     """API endpoint to get gainers statistics"""
     try:
-        collector, collection = get_gainers_losers_collection("gainers")
+        collector, collection = get_gainers_collection()
         if collection is None:
             collector.close()
             return jsonify({
@@ -5925,7 +5911,7 @@ def api_gainers_trigger():
 def api_gainers_data_by_id(record_id):
     """API endpoint to get or delete a specific gainers record"""
     try:
-        collector, collection = get_gainers_losers_collection("gainers")
+        collector, collection = get_gainers_collection()
         if collection is None:
             collector.close()
             return jsonify({
@@ -5995,22 +5981,47 @@ def api_gainers_data_by_id(record_id):
 
 def get_losers_next_run_time():
     """Calculate next scheduled run time for losers using config"""
-    return get_interval_scheduler_next_run_time("gainers_losers")
+    return get_interval_scheduler_next_run_time("losers")
 
 
 def get_losers_status():
-    """Get losers status from unified status file"""
-    status = get_all_gainers_losers_status()
-    # Extract losers-specific result if available
-    if os.path.exists(ALL_GAINERS_LOSERS_STATUS_FILE):
+    """Get losers status from separate scheduler status file"""
+    status = {
+        "running": False,
+        "pid": None,
+        "next_run": None,
+        "last_run": None,
+        "last_status": "unknown"
+    }
+    
+    # Check if process is running
+    is_running, pid = check_scheduler_running('losers_scheduler.py')
+    status["running"] = is_running
+    status["pid"] = pid
+    
+    # Get next run time
+    try:
+        next_run = get_losers_next_run_time()
+        status["next_run"] = next_run.isoformat() if next_run else None
+    except Exception as e:
+        status["next_run"] = None
+    
+    # Try to read status file
+    status_file = 'losers_scheduler_status.json'
+    if os.path.exists(status_file):
         try:
-            with open(ALL_GAINERS_LOSERS_STATUS_FILE, 'r') as f:
+            with open(status_file, 'r') as f:
                 file_status = json.load(f)
-                results = file_status.get("results", {})
-                if "losers" in results:
-                    status["losers_success"] = results.get("losers", False)
-        except:
+                status["last_run"] = file_status.get("last_run")
+                status["last_status"] = file_status.get("last_status", "unknown")
+                status["success"] = file_status.get("success", None)
+        except Exception as e:
             pass
+    
+    # If scheduler is not running and we have no last run info, set default message
+    if not status["running"] and not status["last_run"]:
+        status["last_status"] = "not_started"
+    
     return status
 
 
@@ -6044,7 +6055,7 @@ def api_losers_data():
         
         skip = (page - 1) * limit
         
-        collector, collection = get_gainers_losers_collection("losers")
+        collector, collection = get_losers_collection()
         if collection is None:
             collector.close()
             return jsonify({
@@ -6107,7 +6118,7 @@ def api_losers_data():
 def api_losers_stats():
     """API endpoint to get losers statistics"""
     try:
-        collector, collection = get_gainers_losers_collection("losers")
+        collector, collection = get_losers_collection()
         if collection is None:
             collector.close()
             return jsonify({
@@ -6181,7 +6192,7 @@ def api_losers_trigger():
 def api_losers_data_by_id(record_id):
     """API endpoint to get or delete a specific losers record"""
     try:
-        collector, collection = get_gainers_losers_collection("losers")
+        collector, collection = get_losers_collection()
         if collection is None:
             collector.close()
             return jsonify({
@@ -6858,7 +6869,6 @@ def api_remove_holiday(validated_data):
             "success": True,
             "message": f"Holiday {holiday_date} removed successfully"
         })
-            
     except Exception as e:
         return jsonify({
             "success": False,
@@ -6873,7 +6883,8 @@ _scheduler_config = [
     ('cronjob_scheduler', 'FII/DII Data Collector'),
     ('all_indices_option_chain_scheduler', 'All Indices Option Chain Collector (4 indices)'),
     ('all_banks_option_chain_scheduler', 'All Banks Option Chain Collector (12 banks)'),
-    ('all_gainers_losers_scheduler', 'All Gainers/Losers Collector (2 types)'),
+    ('gainers_scheduler', 'Top 20 Gainers Collector'),
+    ('losers_scheduler', 'Top 20 Losers Collector'),
     ('news_collector_scheduler', 'News Collector'),
     ('livemint_news_scheduler', 'LiveMint News Collector'),
 ]

@@ -95,7 +95,8 @@ def main():
         ('cronjob_scheduler', 'FII/DII Data Collector'),
         ('all_indices_option_chain_scheduler', 'All Indices Option Chain Collector (4 indices)'),
         ('all_banks_option_chain_scheduler', 'All Banks Option Chain Collector (12 banks)'),
-        ('all_gainers_losers_scheduler', 'All Gainers/Losers Collector (2 types)'),
+        ('gainers_scheduler', 'Top 20 Gainers Collector'),
+        ('losers_scheduler', 'Top 20 Losers Collector'),
         ('news_collector_scheduler', 'News Collector'),
         ('livemint_news_scheduler', 'LiveMint News Collector'),
     ]
