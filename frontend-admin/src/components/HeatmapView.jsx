@@ -24,15 +24,22 @@ const HeatmapView = ({ gainersData, losersData, loading }) => {
 
   // Combine and process data
   const processedData = useMemo(() => {
-    if (!gainersData || !losersData) return []
+    if (!gainersData || !losersData) {
+      return []
+    }
 
     const allStocks = []
     const stockMap = new Map() // To avoid duplicates
 
     // Process gainers
     const processSection = (data, type, sectionName) => {
-      if (data?.data && Array.isArray(data.data)) {
-        data.data.forEach(stock => {
+      if (!data) return
+      
+      // Handle both structures: data.data (nested) or data (direct array)
+      const stockArray = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : [])
+      
+      if (stockArray && stockArray.length > 0) {
+        stockArray.forEach(stock => {
           const symbol = stock.symbol || stock.symbolName || ''
           if (!symbol) return
           
@@ -165,6 +172,8 @@ const HeatmapView = ({ gainersData, losersData, loading }) => {
     return `${sign}${change.toFixed(2)}%`
   }
 
+  const timestamp = getTimestamp()
+  
   if (loading) {
     return (
       <div className="heatmap-container">
@@ -175,18 +184,6 @@ const HeatmapView = ({ gainersData, losersData, loading }) => {
       </div>
     )
   }
-
-  if (filteredData.length === 0) {
-    return (
-      <div className="heatmap-container">
-        <div className="heatmap-empty">
-          <p>No data available for heatmap</p>
-        </div>
-      </div>
-    )
-  }
-
-  const timestamp = getTimestamp()
   const formatTimestamp = (ts) => {
     if (!ts) return ''
     try {
@@ -248,7 +245,10 @@ const HeatmapView = ({ gainersData, losersData, loading }) => {
       <div className="heatmap-grid-uniform">
         {filteredData.length === 0 ? (
           <div className="heatmap-empty-state">
-            <p>No data available</p>
+            <p>No data available for heatmap</p>
+            {(!gainersData || !losersData) && (
+              <p className="heatmap-empty-hint">Please collect gainers and losers data first</p>
+            )}
           </div>
         ) : (
           filteredData.map((stock, index) => {

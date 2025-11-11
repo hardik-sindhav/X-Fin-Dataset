@@ -135,8 +135,16 @@ class NSEGainersLosersCollector:
                             timestamp = section_timestamp
                             break
                 
+                # Also check for top-level timestamp
+                if not timestamp and 'timestamp' in data:
+                    timestamp = data.get('timestamp')
+                
                 if not timestamp:
-                    logger.error(f"Timestamp not found in {data_type} response")
+                    logger.error(f"Timestamp not found in {data_type} response. Available keys: {list(data.keys())[:10]}")
+                    # Log first section structure for debugging
+                    for key in ['NIFTY', 'BANKNIFTY', 'NIFTYNEXT50', 'allSec', 'FOSec']:
+                        if key in data:
+                            logger.debug(f"{key} section structure: {type(data[key])}, keys: {list(data[key].keys())[:5] if isinstance(data[key], dict) else 'N/A'}")
                     if attempt < MAX_RETRIES:
                         logger.info(f"Retrying in {RETRY_DELAY} seconds...")
                         time.sleep(RETRY_DELAY)
@@ -203,7 +211,9 @@ class NSEGainersLosersCollector:
                             break
             
             if not timestamp:
-                logger.error(f"Cannot save {data_type}: timestamp not found in data")
+                logger.error(f"Cannot save {data_type}: timestamp not found in data. Data keys: {list(data.keys())[:10]}")
+                # Log data structure for debugging
+                logger.debug(f"Data structure sample: {str(data)[:500]}")
                 return False
             
             # Use upsert with timestamp as unique identifier

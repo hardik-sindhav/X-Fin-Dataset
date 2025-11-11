@@ -283,6 +283,17 @@ def get_next_run_time():
     return None
 
 
+def format_datetime_for_json(dt):
+    """Format datetime to ISO string with UTC timezone marker"""
+    if not dt:
+        return None
+    iso_str = dt.isoformat()
+    # If datetime is naive (no timezone), append 'Z' to mark as UTC
+    # If it already has timezone info, return as-is
+    if not iso_str.endswith('Z') and '+' not in iso_str[-6:]:
+        return iso_str + 'Z'
+    return iso_str
+
 def check_scheduler_running(scheduler_file='cronjob_scheduler.py'):
     """Check if scheduler process is running"""
     try:
@@ -734,8 +745,8 @@ def api_data(validated_data):
                 "date": record.get("date"),
                 "dii": record.get("dii", {}),
                 "fii": record.get("fii", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -1069,8 +1080,8 @@ def api_option_chain_data():
                 "timestamp": timestamp,
                 "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
                 "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -1199,8 +1210,8 @@ def api_option_chain_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -1334,8 +1345,8 @@ def api_banknifty_data():
                 "timestamp": timestamp,
                 "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
                 "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -1492,8 +1503,8 @@ def api_get_banknifty_data(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -1653,8 +1664,8 @@ def api_finnifty_data():
                 "timestamp": timestamp,
                 "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
                 "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -1813,8 +1824,8 @@ def api_finnifty_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -1955,8 +1966,8 @@ def api_midcpnifty_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -2116,8 +2127,8 @@ def api_midcpnifty_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -2304,8 +2315,8 @@ def api_hdfcbank_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -2465,8 +2476,8 @@ def api_hdfcbank_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -2587,8 +2598,8 @@ def api_icicibank_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -2756,8 +2767,8 @@ def api_icicibank_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -2878,8 +2889,8 @@ def api_sbin_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -3047,8 +3058,8 @@ def api_sbin_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -3169,8 +3180,8 @@ def api_kotakbank_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -3338,8 +3349,8 @@ def api_kotakbank_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -3460,8 +3471,8 @@ def api_axisbank_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -3629,8 +3640,8 @@ def api_axisbank_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -3751,8 +3762,8 @@ def api_bankbaroda_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -3920,8 +3931,8 @@ def api_bankbaroda_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -4042,8 +4053,8 @@ def api_pnb_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -4211,8 +4222,8 @@ def api_pnb_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -4333,8 +4344,8 @@ def api_canbk_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -4502,8 +4513,8 @@ def api_canbk_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -4624,8 +4635,8 @@ def api_aubank_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -4793,8 +4804,8 @@ def api_aubank_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -4915,8 +4926,8 @@ def api_indusindbk_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -5084,8 +5095,8 @@ def api_indusindbk_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -5206,8 +5217,8 @@ def api_idfcfirstb_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -5375,8 +5386,8 @@ def api_idfcfirstb_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -5497,8 +5508,8 @@ def api_federalbnk_data():
                 "timestamp": timestamp,
                 "underlyingValue": underlying_value,
                 "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -5666,8 +5677,8 @@ def api_federalbnk_data_by_id(record_id):
                 "_id": str(record.get("_id")),
                 "records": record.get("records", {}),
                 "filtered": record.get("filtered", {}),
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -5705,6 +5716,8 @@ def get_gainers_next_run_time():
 
 def get_gainers_status():
     """Get gainers status from separate scheduler status file"""
+    from scheduler_config import get_config_for_scheduler
+    
     status = {
         "running": False,
         "pid": None,
@@ -5713,29 +5726,69 @@ def get_gainers_status():
         "last_status": "unknown"
     }
     
-    # Check if process is running
-    is_running, pid = check_scheduler_running('gainers_scheduler.py')
+    # Get config and add to status
+    config = get_config_for_scheduler("gainers")
+    if config:
+        status["start_time"] = config.get("start_time", "09:15")
+        status["end_time"] = config.get("end_time", "15:30")
+        status["interval_minutes"] = config.get("interval_minutes", 3)
+        status["enabled"] = config.get("enabled", True)
+    else:
+        # Use defaults if config not found
+        status["start_time"] = "09:15"
+        status["end_time"] = "15:30"
+        status["interval_minutes"] = 3
+        status["enabled"] = True
+    
+    # Check if scheduler thread is running (schedulers run as threads, not separate processes)
+    is_running = False
+    thread_id = None
+    for thread, name in _scheduler_threads:
+        if name == 'Top 20 Gainers Collector' and thread.is_alive():
+            is_running = True
+            thread_id = thread.ident
+            break
+    
+    # Also check for separate process (for backward compatibility)
+    if not is_running:
+        proc_running, pid = check_scheduler_running('gainers_scheduler.py')
+        is_running = proc_running
+        status["pid"] = pid
+    
     status["running"] = is_running
-    status["pid"] = pid
+    if thread_id:
+        status["thread_id"] = thread_id
     
     # Get next run time
     try:
         next_run = get_gainers_next_run_time()
         status["next_run"] = next_run.isoformat() if next_run else None
     except Exception as e:
+        logger.error(f"Error calculating next run time for gainers: {str(e)}")
         status["next_run"] = None
     
     # Try to read status file
     status_file = 'gainers_scheduler_status.json'
-    if os.path.exists(status_file):
-        try:
-            with open(status_file, 'r') as f:
-                file_status = json.load(f)
-                status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
-                status["success"] = file_status.get("success", None)
-        except Exception as e:
-            pass
+    # Try multiple paths to find the status file
+    status_file_paths = [
+        status_file,  # Current directory
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), status_file),  # Same directory as this file
+        os.path.join('backend', status_file)  # Backend subdirectory
+    ]
+    
+    for status_file_path in status_file_paths:
+        if os.path.exists(status_file_path):
+            try:
+                with open(status_file_path, 'r') as f:
+                    file_status = json.load(f)
+                    status["last_run"] = file_status.get("last_run")
+                    status["last_status"] = file_status.get("last_status", "unknown")
+                    status["success"] = file_status.get("success", None)
+                    logger.debug(f"Successfully read gainers status from {status_file_path}")
+                    break
+            except Exception as e:
+                logger.debug(f"Error reading gainers status file {status_file_path}: {str(e)}")
+                continue
     
     # If scheduler is not running and we have no last run info, set default message
     if not status["running"] and not status["last_run"]:
@@ -5792,12 +5845,28 @@ def api_gainers_data():
         data = []
         for record in records:
             timestamp = record.get("timestamp")
+            
+            # Calculate counts from sections
+            nifty_count = 0
+            banknifty_count = 0
+            legends_count = 0
+            
+            if isinstance(record.get("NIFTY"), dict) and isinstance(record.get("NIFTY").get("data"), list):
+                nifty_count = len(record.get("NIFTY", {}).get("data", []))
+            if isinstance(record.get("BANKNIFTY"), dict) and isinstance(record.get("BANKNIFTY").get("data"), list):
+                banknifty_count = len(record.get("BANKNIFTY", {}).get("data", []))
+            if isinstance(record.get("legends"), list):
+                legends_count = len(record.get("legends", []))
+            
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": timestamp,
-                "data": record,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "nifty_count": nifty_count,
+                "banknifty_count": banknifty_count,
+                "legends": record.get("legends", []),
+                "data": {k: (str(v) if isinstance(v, ObjectId) else v) for k, v in record.items()},  # Keep full data for detail view (with ObjectId converted)
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -5841,10 +5910,21 @@ def api_gainers_stats():
         latest = collection.find_one(sort=[("timestamp", -1)])
         
         latest_timestamp = latest.get("timestamp") if latest else None
+        latest_nifty_count = 0
+        latest_banknifty_count = 0
+        
+        if latest:
+            # Count NIFTY and BANKNIFTY data
+            if isinstance(latest.get("NIFTY"), dict) and isinstance(latest.get("NIFTY").get("data"), list):
+                latest_nifty_count = len(latest.get("NIFTY", {}).get("data", []))
+            if isinstance(latest.get("BANKNIFTY"), dict) and isinstance(latest.get("BANKNIFTY").get("data"), list):
+                latest_banknifty_count = len(latest.get("BANKNIFTY", {}).get("data", []))
         
         stats = {
             "total_records": total_count,
-            "latest_timestamp": latest_timestamp
+            "latest_timestamp": latest_timestamp,
+            "latest_nifty_count": latest_nifty_count,
+            "latest_banknifty_count": latest_banknifty_count
         }
         
         collector.close()
@@ -5861,22 +5941,36 @@ def api_gainers_stats():
 
 
 @app.route('/api/gainers/trigger', methods=['POST'])
+@token_required
 def api_gainers_trigger():
     """API endpoint to manually trigger gainers data collection"""
+    collector = None
     try:
+        logger.info("Manual trigger for gainers data collection initiated")
         collector = NSEGainersLosersCollector()
         success = collector.collect_and_save_single("gainers")
-        collector.close()
         
-        return jsonify({
-            "success": success,
-            "message": "Gainers data collection completed" if success else "Gainers data collection failed"
-        })
+        if success:
+            logger.info("Gainers data collection completed successfully via manual trigger")
+            return jsonify({
+                "success": True,
+                "message": "Gainers data collection completed successfully"
+            })
+        else:
+            logger.error("Gainers data collection failed via manual trigger")
+            return jsonify({
+                "success": False,
+                "error": "Gainers data collection failed. Check logs for details."
+            }), 500
     except Exception as e:
+        logger.error(f"Error in gainers trigger endpoint: {str(e)}", exc_info=True)
         return jsonify({
             "success": False,
             "error": str(e)
         }), 500
+    finally:
+        if collector:
+            collector.close()
 
 
 @app.route('/api/gainers/data/<record_id>', methods=['GET', 'DELETE'])
@@ -5911,12 +6005,24 @@ def api_gainers_data_by_id(record_id):
                 }), 404
             
             # Convert ObjectId to string and format dates
+            # Convert full record to dict and handle ObjectId serialization
+            record_data = dict(record)
+            if "_id" in record_data:
+                record_data["_id"] = str(record_data["_id"])
+            
+            # Return the full record data structure for heatmap
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": record.get("timestamp"),
-                "data": record,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "NIFTY": record.get("NIFTY", {}),
+                "BANKNIFTY": record.get("BANKNIFTY", {}),
+                "NIFTYNEXT50": record.get("NIFTYNEXT50", {}),
+                "allSec": record.get("allSec", {}),
+                "FOSec": record.get("FOSec", {}),
+                "legends": record.get("legends", []),
+                "data": record_data,  # Keep full data (with ObjectId converted)
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
@@ -5954,6 +6060,8 @@ def get_losers_next_run_time():
 
 def get_losers_status():
     """Get losers status from separate scheduler status file"""
+    from scheduler_config import get_config_for_scheduler
+    
     status = {
         "running": False,
         "pid": None,
@@ -5962,29 +6070,69 @@ def get_losers_status():
         "last_status": "unknown"
     }
     
-    # Check if process is running
-    is_running, pid = check_scheduler_running('losers_scheduler.py')
+    # Get config and add to status
+    config = get_config_for_scheduler("losers")
+    if config:
+        status["start_time"] = config.get("start_time", "09:15")
+        status["end_time"] = config.get("end_time", "15:30")
+        status["interval_minutes"] = config.get("interval_minutes", 3)
+        status["enabled"] = config.get("enabled", True)
+    else:
+        # Use defaults if config not found
+        status["start_time"] = "09:15"
+        status["end_time"] = "15:30"
+        status["interval_minutes"] = 3
+        status["enabled"] = True
+    
+    # Check if scheduler thread is running (schedulers run as threads, not separate processes)
+    is_running = False
+    thread_id = None
+    for thread, name in _scheduler_threads:
+        if name == 'Top 20 Losers Collector' and thread.is_alive():
+            is_running = True
+            thread_id = thread.ident
+            break
+    
+    # Also check for separate process (for backward compatibility)
+    if not is_running:
+        proc_running, pid = check_scheduler_running('losers_scheduler.py')
+        is_running = proc_running
+        status["pid"] = pid
+    
     status["running"] = is_running
-    status["pid"] = pid
+    if thread_id:
+        status["thread_id"] = thread_id
     
     # Get next run time
     try:
         next_run = get_losers_next_run_time()
         status["next_run"] = next_run.isoformat() if next_run else None
     except Exception as e:
+        logger.error(f"Error calculating next run time for losers: {str(e)}")
         status["next_run"] = None
     
     # Try to read status file
     status_file = 'losers_scheduler_status.json'
-    if os.path.exists(status_file):
-        try:
-            with open(status_file, 'r') as f:
-                file_status = json.load(f)
-                status["last_run"] = file_status.get("last_run")
-                status["last_status"] = file_status.get("last_status", "unknown")
-                status["success"] = file_status.get("success", None)
-        except Exception as e:
-            pass
+    # Try multiple paths to find the status file
+    status_file_paths = [
+        status_file,  # Current directory
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), status_file),  # Same directory as this file
+        os.path.join('backend', status_file)  # Backend subdirectory
+    ]
+    
+    for status_file_path in status_file_paths:
+        if os.path.exists(status_file_path):
+            try:
+                with open(status_file_path, 'r') as f:
+                    file_status = json.load(f)
+                    status["last_run"] = file_status.get("last_run")
+                    status["last_status"] = file_status.get("last_status", "unknown")
+                    status["success"] = file_status.get("success", None)
+                    logger.debug(f"Successfully read losers status from {status_file_path}")
+                    break
+            except Exception as e:
+                logger.debug(f"Error reading losers status file {status_file_path}: {str(e)}")
+                continue
     
     # If scheduler is not running and we have no last run info, set default message
     if not status["running"] and not status["last_run"]:
@@ -6041,12 +6189,28 @@ def api_losers_data():
         data = []
         for record in records:
             timestamp = record.get("timestamp")
+            
+            # Calculate counts from sections
+            nifty_count = 0
+            banknifty_count = 0
+            legends_count = 0
+            
+            if isinstance(record.get("NIFTY"), dict) and isinstance(record.get("NIFTY").get("data"), list):
+                nifty_count = len(record.get("NIFTY", {}).get("data", []))
+            if isinstance(record.get("BANKNIFTY"), dict) and isinstance(record.get("BANKNIFTY").get("data"), list):
+                banknifty_count = len(record.get("BANKNIFTY", {}).get("data", []))
+            if isinstance(record.get("legends"), list):
+                legends_count = len(record.get("legends", []))
+            
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": timestamp,
-                "data": record,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "nifty_count": nifty_count,
+                "banknifty_count": banknifty_count,
+                "legends": record.get("legends", []),
+                "data": {k: (str(v) if isinstance(v, ObjectId) else v) for k, v in record.items()},  # Keep full data for detail view (with ObjectId converted)
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
@@ -6090,10 +6254,21 @@ def api_losers_stats():
         latest = collection.find_one(sort=[("timestamp", -1)])
         
         latest_timestamp = latest.get("timestamp") if latest else None
+        latest_nifty_count = 0
+        latest_banknifty_count = 0
+        
+        if latest:
+            # Count NIFTY and BANKNIFTY data
+            if isinstance(latest.get("NIFTY"), dict) and isinstance(latest.get("NIFTY").get("data"), list):
+                latest_nifty_count = len(latest.get("NIFTY", {}).get("data", []))
+            if isinstance(latest.get("BANKNIFTY"), dict) and isinstance(latest.get("BANKNIFTY").get("data"), list):
+                latest_banknifty_count = len(latest.get("BANKNIFTY", {}).get("data", []))
         
         stats = {
             "total_records": total_count,
-            "latest_timestamp": latest_timestamp
+            "latest_timestamp": latest_timestamp,
+            "latest_nifty_count": latest_nifty_count,
+            "latest_banknifty_count": latest_banknifty_count
         }
         
         collector.close()
@@ -6110,22 +6285,36 @@ def api_losers_stats():
 
 
 @app.route('/api/losers/trigger', methods=['POST'])
+@token_required
 def api_losers_trigger():
     """API endpoint to manually trigger losers data collection"""
+    collector = None
     try:
+        logger.info("Manual trigger for losers data collection initiated")
         collector = NSEGainersLosersCollector()
         success = collector.collect_and_save_single("losers")
-        collector.close()
         
-        return jsonify({
-            "success": success,
-            "message": "Losers data collection completed" if success else "Losers data collection failed"
-        })
+        if success:
+            logger.info("Losers data collection completed successfully via manual trigger")
+            return jsonify({
+                "success": True,
+                "message": "Losers data collection completed successfully"
+            })
+        else:
+            logger.error("Losers data collection failed via manual trigger")
+            return jsonify({
+                "success": False,
+                "error": "Losers data collection failed. Check logs for details."
+            }), 500
     except Exception as e:
+        logger.error(f"Error in losers trigger endpoint: {str(e)}", exc_info=True)
         return jsonify({
             "success": False,
             "error": str(e)
         }), 500
+    finally:
+        if collector:
+            collector.close()
 
 
 @app.route('/api/losers/data/<record_id>', methods=['GET', 'DELETE'])
@@ -6160,12 +6349,19 @@ def api_losers_data_by_id(record_id):
                 }), 404
             
             # Convert ObjectId to string and format dates
+            # Return the full record data structure for heatmap
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": record.get("timestamp"),
-                "data": record,
-                "insertedAt": record.get("insertedAt").isoformat() if record.get("insertedAt") else None,
-                "updatedAt": record.get("updatedAt").isoformat() if record.get("updatedAt") else None
+                "NIFTY": record.get("NIFTY", {}),
+                "BANKNIFTY": record.get("BANKNIFTY", {}),
+                "NIFTYNEXT50": record.get("NIFTYNEXT50", {}),
+                "allSec": record.get("allSec", {}),
+                "FOSec": record.get("FOSec", {}),
+                "legends": record.get("legends", []),
+                "data": {k: (str(v) if isinstance(v, ObjectId) else v) for k, v in record.items()},  # Keep full data (with ObjectId converted)
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             
             return jsonify({
