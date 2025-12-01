@@ -285,6 +285,23 @@ def get_next_run_time():
     return None
 
 
+def serialize_mongo_document(doc):
+    """
+    Recursively serialize MongoDB document to JSON-serializable format
+    Handles ObjectId, datetime, and nested structures
+    """
+    if isinstance(doc, ObjectId):
+        return str(doc)
+    elif isinstance(doc, datetime):
+        return format_datetime_for_json(doc, is_utc=True)
+    elif isinstance(doc, dict):
+        return {k: serialize_mongo_document(v) for k, v in doc.items()}
+    elif isinstance(doc, list):
+        return [serialize_mongo_document(item) for item in doc]
+    else:
+        return doc
+
+
 def format_datetime_for_json(dt, is_utc=False):
     """
     Format datetime to ISO string with appropriate timezone marker
@@ -1261,8 +1278,8 @@ def api_option_chain_data():
         # Get total count with filter
         total_count = collection.count_documents(query_filter)
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1315,8 +1332,8 @@ def api_option_chain_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest = collection.find_one(sort=[("insertedAt", -1)])
         
         latest_timestamp = None
         latest_underlying = None
@@ -1526,8 +1543,8 @@ def api_banknifty_data():
         # Get total count with filter
         total_count = collection.count_documents(query_filter)
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1610,8 +1627,8 @@ def api_banknifty_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest = collection.find_one(sort=[("insertedAt", -1)])
         
         latest_timestamp = None
         latest_underlying = None
@@ -1845,8 +1862,8 @@ def api_finnifty_data():
         # Get total count with filter
         total_count = collection.count_documents(query_filter)
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -1929,8 +1946,8 @@ def api_finnifty_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest = collection.find_one(sort=[("insertedAt", -1)])
         
         latest_timestamp = None
         latest_underlying = None
@@ -2138,8 +2155,8 @@ def api_midcpnifty_data():
         # Get total count with filter
         total_count = collection.count_documents(query_filter)
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find(query_filter).sort("records.timestamp", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -2230,8 +2247,8 @@ def api_midcpnifty_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest = collection.find_one(sort=[("insertedAt", -1)])
         
         latest_timestamp = None
         latest_underlying = None
@@ -2476,11 +2493,8 @@ def api_hdfcbank_status():
 @app.route('/api/hdfcbank/data')
 @token_required
 def api_hdfcbank_data():
-    """API endpoint to get collected HDFC Bank option chain data with pagination"""
+    """API endpoint to get collected HDFC Bank option chain data with pagination and date filtering"""
     try:
-        page, limit = get_pagination_params()
-        skip = (page - 1) * limit
-        
         collector, collection = get_bank_collection("HDFCBANK")
         if collection is None:
             collector.close()
@@ -2489,33 +2503,50 @@ def api_hdfcbank_data():
                 "error": "Collection not found for HDFCBANK"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get pagination parameters
+        page, limit = get_pagination_params()
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["records.timestamp"] = {"$gte": start_date}
+        if end_date:
+            if "records.timestamp" in query_filter:
+                query_filter["records.timestamp"]["$lte"] = end_date
+            else:
+                query_filter["records.timestamp"] = {"$lte": end_date}
+        
+        # Calculate skip
+        skip = (page - 1) * limit
+        
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
+        
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
         for record in records:
-            records_data = record.get("records", {})
-            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
-            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
-            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
-            
+            timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
         collector.close()
         
-        total_pages = (total_count + limit - 1) // limit
+        # Calculate pagination info
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
         
         return jsonify({
             "success": True,
@@ -2580,8 +2611,8 @@ def api_hdfcbank_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -2759,11 +2790,8 @@ def api_icicibank_status():
 @app.route('/api/icicibank/data')
 @token_required
 def api_icicibank_data():
-    """API endpoint to get collected ICICI Bank option chain data with pagination"""
+    """API endpoint to get collected ICICI Bank option chain data with pagination and date filtering"""
     try:
-        page, limit = get_pagination_params()
-        skip = (page - 1) * limit
-        
         collector, collection = get_bank_collection("ICICIBANK")
         if collection is None:
             collector.close()
@@ -2772,33 +2800,50 @@ def api_icicibank_data():
                 "error": "Collection not found for ICICIBANK"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get pagination parameters
+        page, limit = get_pagination_params()
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["records.timestamp"] = {"$gte": start_date}
+        if end_date:
+            if "records.timestamp" in query_filter:
+                query_filter["records.timestamp"]["$lte"] = end_date
+            else:
+                query_filter["records.timestamp"] = {"$lte": end_date}
+        
+        # Calculate skip
+        skip = (page - 1) * limit
+        
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
+        
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
         for record in records:
-            records_data = record.get("records", {})
-            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
-            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
-            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
-            
+            timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
         collector.close()
         
-        total_pages = (total_count + limit - 1) // limit
+        # Calculate pagination info
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
         
         return jsonify({
             "success": True,
@@ -2862,8 +2907,8 @@ def api_icicibank_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -3050,11 +3095,8 @@ def api_sbin_status():
 @app.route('/api/sbin/data')
 @token_required
 def api_sbin_data():
-    """API endpoint to get collected SBIN option chain data with pagination"""
+    """API endpoint to get collected SBIN option chain data with pagination and date filtering"""
     try:
-        page, limit = get_pagination_params()
-        skip = (page - 1) * limit
-        
         collector, collection = get_bank_collection("SBIN")
         if collection is None:
             collector.close()
@@ -3063,33 +3105,50 @@ def api_sbin_data():
                 "error": "Collection not found for SBIN"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get pagination parameters
+        page, limit = get_pagination_params()
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["records.timestamp"] = {"$gte": start_date}
+        if end_date:
+            if "records.timestamp" in query_filter:
+                query_filter["records.timestamp"]["$lte"] = end_date
+            else:
+                query_filter["records.timestamp"] = {"$lte": end_date}
+        
+        # Calculate skip
+        skip = (page - 1) * limit
+        
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
+        
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
         for record in records:
-            records_data = record.get("records", {})
-            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
-            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
-            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
-            
+            timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
         collector.close()
         
-        total_pages = (total_count + limit - 1) // limit
+        # Calculate pagination info
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
         
         return jsonify({
             "success": True,
@@ -3153,8 +3212,8 @@ def api_sbin_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -3341,11 +3400,8 @@ def api_kotakbank_status():
 @app.route('/api/kotakbank/data')
 @token_required
 def api_kotakbank_data():
-    """API endpoint to get collected Kotak Bank option chain data with pagination"""
+    """API endpoint to get collected Kotak Bank option chain data with pagination and date filtering"""
     try:
-        page, limit = get_pagination_params()
-        skip = (page - 1) * limit
-        
         collector, collection = get_bank_collection("KOTAKBANK")
         if collection is None:
             collector.close()
@@ -3354,33 +3410,50 @@ def api_kotakbank_data():
                 "error": "Collection not found for KOTAKBANK"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get pagination parameters
+        page, limit = get_pagination_params()
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["records.timestamp"] = {"$gte": start_date}
+        if end_date:
+            if "records.timestamp" in query_filter:
+                query_filter["records.timestamp"]["$lte"] = end_date
+            else:
+                query_filter["records.timestamp"] = {"$lte": end_date}
+        
+        # Calculate skip
+        skip = (page - 1) * limit
+        
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
+        
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
         for record in records:
-            records_data = record.get("records", {})
-            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
-            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
-            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
-            
+            timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
         collector.close()
         
-        total_pages = (total_count + limit - 1) // limit
+        # Calculate pagination info
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
         
         return jsonify({
             "success": True,
@@ -3444,8 +3517,8 @@ def api_kotakbank_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -3632,11 +3705,8 @@ def api_axisbank_status():
 @app.route('/api/axisbank/data')
 @token_required
 def api_axisbank_data():
-    """API endpoint to get collected Axis Bank option chain data with pagination"""
+    """API endpoint to get collected Axis Bank option chain data with pagination and date filtering"""
     try:
-        page, limit = get_pagination_params()
-        skip = (page - 1) * limit
-        
         collector, collection = get_bank_collection("AXISBANK")
         if collection is None:
             collector.close()
@@ -3645,33 +3715,50 @@ def api_axisbank_data():
                 "error": "Collection not found for AXISBANK"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get pagination parameters
+        page, limit = get_pagination_params()
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Build query filter
+        query_filter = {}
+        if start_date:
+            query_filter["records.timestamp"] = {"$gte": start_date}
+        if end_date:
+            if "records.timestamp" in query_filter:
+                query_filter["records.timestamp"]["$lte"] = end_date
+            else:
+                query_filter["records.timestamp"] = {"$lte": end_date}
+        
+        # Calculate skip
+        skip = (page - 1) * limit
+        
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
+        
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
         for record in records:
-            records_data = record.get("records", {})
-            timestamp = records_data.get("timestamp") if isinstance(records_data, dict) else None
-            underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
-            data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
-            
+            timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
             }
             data.append(record_dict)
         
         collector.close()
         
-        total_pages = (total_count + limit - 1) // limit
+        # Calculate pagination info
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
         
         return jsonify({
             "success": True,
@@ -3735,8 +3822,8 @@ def api_axisbank_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -3940,7 +4027,7 @@ def api_bankbaroda_data():
         total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4026,8 +4113,8 @@ def api_bankbaroda_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -4231,7 +4318,7 @@ def api_pnb_data():
         total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4317,8 +4404,8 @@ def api_pnb_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -4522,7 +4609,7 @@ def api_canbk_data():
         total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4608,8 +4695,8 @@ def api_canbk_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -4813,7 +4900,7 @@ def api_aubank_data():
         total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4899,8 +4986,8 @@ def api_aubank_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -5104,7 +5191,7 @@ def api_indusindbk_data():
         total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -5190,8 +5277,8 @@ def api_indusindbk_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -5395,7 +5482,7 @@ def api_idfcfirstb_data():
         total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -5481,8 +5568,8 @@ def api_idfcfirstb_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -5686,7 +5773,7 @@ def api_federalbnk_data():
         total_count = collection.count_documents({})
         
         # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("records.timestamp", -1).skip(skip).limit(limit))
+        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -5772,8 +5859,8 @@ def api_federalbnk_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest_record = collection.find_one(sort=[("records.timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        latest_record = collection.find_one(sort=[("insertedAt", -1)])
         latest_timestamp = None
         latest_underlying = None
         if latest_record:
@@ -6008,15 +6095,18 @@ def api_gainers_data():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
-        # Build query filter
+        # Build query filter (only use non-empty date filters)
+        # Note: Date filters use timestamp (string) field, but sorting uses insertedAt (datetime) for correct chronological order
         query_filter = {}
-        if start_date:
-            query_filter["timestamp"] = {"$gte": start_date}
-        if end_date:
+        if start_date and start_date.strip():
+            query_filter["timestamp"] = {"$gte": start_date.strip()}
+        if end_date and end_date.strip():
             if "timestamp" in query_filter:
-                query_filter["timestamp"]["$lte"] = end_date
+                query_filter["timestamp"]["$lte"] = end_date.strip()
             else:
-                query_filter["timestamp"] = {"$lte": end_date}
+                query_filter["timestamp"] = {"$lte": end_date.strip()}
+        
+        logger.debug(f"Gainers data request: start_date={start_date}, end_date={end_date}, query_filter={query_filter}")
         
         skip = (page - 1) * limit
         
@@ -6030,38 +6120,45 @@ def api_gainers_data():
         
         # Get total count with filter
         total_count = collection.count_documents(query_filter)
+        logger.debug(f"Gainers data query: filter={query_filter}, total_count={total_count}, page={page}, limit={limit}")
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find(query_filter).sort("timestamp", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
+        logger.debug(f"Gainers data query returned {len(records)} records")
         
         # Convert ObjectId to string and format dates
         data = []
         for record in records:
-            timestamp = record.get("timestamp")
-            
-            # Calculate counts from sections
-            nifty_count = 0
-            banknifty_count = 0
-            legends_count = 0
-            
-            if isinstance(record.get("NIFTY"), dict) and isinstance(record.get("NIFTY").get("data"), list):
-                nifty_count = len(record.get("NIFTY", {}).get("data", []))
-            if isinstance(record.get("BANKNIFTY"), dict) and isinstance(record.get("BANKNIFTY").get("data"), list):
-                banknifty_count = len(record.get("BANKNIFTY", {}).get("data", []))
-            if isinstance(record.get("legends"), list):
-                legends_count = len(record.get("legends", []))
-            
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "nifty_count": nifty_count,
-                "banknifty_count": banknifty_count,
-                "legends": record.get("legends", []),
-                "data": {k: (str(v) if isinstance(v, ObjectId) else v) for k, v in record.items()},  # Keep full data for detail view (with ObjectId converted)
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
-            }
-            data.append(record_dict)
+            try:
+                timestamp = record.get("timestamp")
+                
+                # Calculate counts from sections
+                nifty_count = 0
+                banknifty_count = 0
+                legends_count = 0
+                
+                if isinstance(record.get("NIFTY"), dict) and isinstance(record.get("NIFTY").get("data"), list):
+                    nifty_count = len(record.get("NIFTY", {}).get("data", []))
+                if isinstance(record.get("BANKNIFTY"), dict) and isinstance(record.get("BANKNIFTY").get("data"), list):
+                    banknifty_count = len(record.get("BANKNIFTY", {}).get("data", []))
+                if isinstance(record.get("legends"), list):
+                    legends_count = len(record.get("legends", []))
+                
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "nifty_count": nifty_count,
+                    "banknifty_count": banknifty_count,
+                    "legends": serialize_mongo_document(record.get("legends", [])),
+                    "data": serialize_mongo_document(record),  # Keep full data for detail view (properly serialized)
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
+                data.append(record_dict)
+            except Exception as record_error:
+                logger.error(f"Error processing gainers record {record.get('_id')}: {str(record_error)}", exc_info=True)
+                # Continue processing other records even if one fails
+                continue
         
         collector.close()
         
@@ -6099,8 +6196,10 @@ def api_gainers_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest = collection.find_one(sort=[("timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of timestamp (string) for correct chronological order
+        latest = collection.find_one(sort=[("insertedAt", -1)])
+        
+        logger.debug(f"Gainers stats: total_count={total_count}, latest_record_id={latest.get('_id') if latest else None}, latest_timestamp={latest.get('timestamp') if latest else None}, latest_insertedAt={latest.get('insertedAt') if latest else None}")
         
         latest_timestamp = latest.get("timestamp") if latest else None
         latest_nifty_count = 0
@@ -6198,22 +6297,17 @@ def api_gainers_data_by_id(record_id):
                 }), 404
             
             # Convert ObjectId to string and format dates
-            # Convert full record to dict and handle ObjectId serialization
-            record_data = dict(record)
-            if "_id" in record_data:
-                record_data["_id"] = str(record_data["_id"])
-            
             # Return the full record data structure for heatmap
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": record.get("timestamp"),
-                "NIFTY": record.get("NIFTY", {}),
-                "BANKNIFTY": record.get("BANKNIFTY", {}),
-                "NIFTYNEXT50": record.get("NIFTYNEXT50", {}),
-                "allSec": record.get("allSec", {}),
-                "FOSec": record.get("FOSec", {}),
-                "legends": record.get("legends", []),
-                "data": record_data,  # Keep full data (with ObjectId converted)
+                "NIFTY": serialize_mongo_document(record.get("NIFTY", {})),
+                "BANKNIFTY": serialize_mongo_document(record.get("BANKNIFTY", {})),
+                "NIFTYNEXT50": serialize_mongo_document(record.get("NIFTYNEXT50", {})),
+                "allSec": serialize_mongo_document(record.get("allSec", {})),
+                "FOSec": serialize_mongo_document(record.get("FOSec", {})),
+                "legends": serialize_mongo_document(record.get("legends", [])),
+                "data": serialize_mongo_document(record),  # Keep full data (properly serialized)
                 "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
                 "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
@@ -6352,15 +6446,18 @@ def api_losers_data():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
-        # Build query filter
+        # Build query filter (only use non-empty date filters)
+        # Note: Date filters use timestamp (string) field, but sorting uses insertedAt (datetime) for correct chronological order
         query_filter = {}
-        if start_date:
-            query_filter["timestamp"] = {"$gte": start_date}
-        if end_date:
+        if start_date and start_date.strip():
+            query_filter["timestamp"] = {"$gte": start_date.strip()}
+        if end_date and end_date.strip():
             if "timestamp" in query_filter:
-                query_filter["timestamp"]["$lte"] = end_date
+                query_filter["timestamp"]["$lte"] = end_date.strip()
             else:
-                query_filter["timestamp"] = {"$lte": end_date}
+                query_filter["timestamp"] = {"$lte": end_date.strip()}
+        
+        logger.debug(f"Losers data request: start_date={start_date}, end_date={end_date}, query_filter={query_filter}")
         
         skip = (page - 1) * limit
         
@@ -6374,38 +6471,45 @@ def api_losers_data():
         
         # Get total count with filter
         total_count = collection.count_documents(query_filter)
+        logger.debug(f"Losers data query: filter={query_filter}, total_count={total_count}, page={page}, limit={limit}")
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find(query_filter).sort("timestamp", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
+        logger.debug(f"Losers data query returned {len(records)} records")
         
         # Convert ObjectId to string and format dates
         data = []
         for record in records:
-            timestamp = record.get("timestamp")
-            
-            # Calculate counts from sections
-            nifty_count = 0
-            banknifty_count = 0
-            legends_count = 0
-            
-            if isinstance(record.get("NIFTY"), dict) and isinstance(record.get("NIFTY").get("data"), list):
-                nifty_count = len(record.get("NIFTY", {}).get("data", []))
-            if isinstance(record.get("BANKNIFTY"), dict) and isinstance(record.get("BANKNIFTY").get("data"), list):
-                banknifty_count = len(record.get("BANKNIFTY", {}).get("data", []))
-            if isinstance(record.get("legends"), list):
-                legends_count = len(record.get("legends", []))
-            
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "nifty_count": nifty_count,
-                "banknifty_count": banknifty_count,
-                "legends": record.get("legends", []),
-                "data": {k: (str(v) if isinstance(v, ObjectId) else v) for k, v in record.items()},  # Keep full data for detail view (with ObjectId converted)
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
-            }
-            data.append(record_dict)
+            try:
+                timestamp = record.get("timestamp")
+                
+                # Calculate counts from sections
+                nifty_count = 0
+                banknifty_count = 0
+                legends_count = 0
+                
+                if isinstance(record.get("NIFTY"), dict) and isinstance(record.get("NIFTY").get("data"), list):
+                    nifty_count = len(record.get("NIFTY", {}).get("data", []))
+                if isinstance(record.get("BANKNIFTY"), dict) and isinstance(record.get("BANKNIFTY").get("data"), list):
+                    banknifty_count = len(record.get("BANKNIFTY", {}).get("data", []))
+                if isinstance(record.get("legends"), list):
+                    legends_count = len(record.get("legends", []))
+                
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "nifty_count": nifty_count,
+                    "banknifty_count": banknifty_count,
+                    "legends": serialize_mongo_document(record.get("legends", [])),
+                    "data": serialize_mongo_document(record),  # Keep full data for detail view (properly serialized)
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
+                data.append(record_dict)
+            except Exception as record_error:
+                logger.error(f"Error processing record {record.get('_id')}: {str(record_error)}", exc_info=True)
+                # Continue processing other records even if one fails
+                continue
         
         collector.close()
         
@@ -6423,6 +6527,7 @@ def api_losers_data():
             "data": data
         })
     except Exception as e:
+        logger.error(f"Error in api_losers_data: {str(e)}", exc_info=True)
         return jsonify({
             "success": False,
             "error": str(e)
@@ -6443,8 +6548,10 @@ def api_losers_stats():
         
         total_count = collection.count_documents({})
         
-        # Get latest record
-        latest = collection.find_one(sort=[("timestamp", -1)])
+        # Get latest record - sort by insertedAt (datetime) instead of timestamp (string) for correct chronological order
+        latest = collection.find_one(sort=[("insertedAt", -1)])
+        
+        logger.debug(f"Losers stats: total_count={total_count}, latest_record_id={latest.get('_id') if latest else None}, latest_timestamp={latest.get('timestamp') if latest else None}, latest_insertedAt={latest.get('insertedAt') if latest else None}")
         
         latest_timestamp = latest.get("timestamp") if latest else None
         latest_nifty_count = 0
@@ -6546,13 +6653,13 @@ def api_losers_data_by_id(record_id):
             record_dict = {
                 "_id": str(record.get("_id")),
                 "timestamp": record.get("timestamp"),
-                "NIFTY": record.get("NIFTY", {}),
-                "BANKNIFTY": record.get("BANKNIFTY", {}),
-                "NIFTYNEXT50": record.get("NIFTYNEXT50", {}),
-                "allSec": record.get("allSec", {}),
-                "FOSec": record.get("FOSec", {}),
-                "legends": record.get("legends", []),
-                "data": {k: (str(v) if isinstance(v, ObjectId) else v) for k, v in record.items()},  # Keep full data (with ObjectId converted)
+                "NIFTY": serialize_mongo_document(record.get("NIFTY", {})),
+                "BANKNIFTY": serialize_mongo_document(record.get("BANKNIFTY", {})),
+                "NIFTYNEXT50": serialize_mongo_document(record.get("NIFTYNEXT50", {})),
+                "allSec": serialize_mongo_document(record.get("allSec", {})),
+                "FOSec": serialize_mongo_document(record.get("FOSec", {})),
+                "legends": serialize_mongo_document(record.get("legends", [])),
+                "data": serialize_mongo_document(record),  # Keep full data (properly serialized)
                 "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
                 "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
             }
