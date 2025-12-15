@@ -99,6 +99,7 @@ def main():
         ('losers_scheduler', 'Top 20 Losers Collector'),
         ('news_collector_scheduler', 'News Collector'),
         ('livemint_news_scheduler', 'LiveMint News Collector'),
+        ('sensex_option_chain_scheduler', 'Sensex Option Chain Collector (BSE)'),
     ]
     
     threads = []

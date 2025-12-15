@@ -220,6 +220,7 @@ ALL_INDICES_STATUS_FILE = 'all_indices_option_chain_scheduler_status.json'
 ALL_BANKS_STATUS_FILE = 'all_banks_option_chain_scheduler_status.json'
 NEWS_COLLECTOR_STATUS_FILE = 'news_collector_scheduler_status.json'
 LIVEMINT_NEWS_STATUS_FILE = 'livemint_news_scheduler_status.json'
+SENSEX_STATUS_FILE = 'sensex_option_chain_scheduler_status.json'
 
 
 def get_next_valid_date(start_date, max_days=30):
@@ -7319,6 +7320,7 @@ _scheduler_config = [
     ('losers_scheduler', 'Top 20 Losers Collector'),
     ('news_collector_scheduler', 'News Collector'),
     ('livemint_news_scheduler', 'LiveMint News Collector'),
+    ('sensex_option_chain_scheduler', 'Sensex Option Chain Collector (BSE)'),
 ]
 
 def run_scheduler_in_thread(module_name, scheduler_name, max_retries=3, retry_delay=30):
@@ -7563,6 +7565,7 @@ def api_schedulers_status():
                 'Top 20 Losers Collector',
                 'News Collector',
                 'LiveMint News Collector',
+                'Sensex Option Chain Collector (BSE)',
             ]
             for name in schedulers:
                 status_list.append({
