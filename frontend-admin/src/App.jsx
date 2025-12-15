@@ -30,6 +30,7 @@ import Settings from './components/Settings'
 import DetailView from './components/DetailView'
 import HeatmapView from './components/HeatmapView'
 import Backup from './components/Backup'
+import AlgoTest from './components/AlgoTest'
 import './App.css'
 
 import { API_BASE } from './config'
@@ -40,7 +41,7 @@ function App() {
   const [authToken, setAuthToken] = useState(null)
   const [username, setUsername] = useState('')
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
-  const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'gainers', 'losers', 'news', or 'livemint-news'
+  const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'gainers', 'losers', 'news', 'livemint-news', 'algo-test'
   
   // FII/DII state
   const [status, setStatus] = useState(null)
@@ -1810,6 +1811,22 @@ function App() {
             >
               <BarChart3 size={20} />
               Federal Bank
+            </li>
+          </ul>
+        </div>
+
+        <div className="sidebar-section">
+          <div className="sidebar-section-title">Algorithms</div>
+          <ul className="sidebar-menu">
+            <li 
+              className={`sidebar-item ${activeTab === 'algo-test' ? 'active' : ''}`}
+              onClick={() => {
+                handleTabChange('algo-test')
+                setSidebarOpen(false)
+              }}
+            >
+              <Activity size={20} />
+              Algo Test
             </li>
           </ul>
         </div>
@@ -5567,6 +5584,8 @@ function App() {
           <Settings authToken={authToken} />
         ) : activeTab === 'backup' ? (
           <Backup authToken={authToken} />
+        ) : activeTab === 'algo-test' ? (
+          <AlgoTest />
         ) : activeTab === 'livemint-news' ? (
           <>
             {/* LiveMint News Collector Status Card */}
