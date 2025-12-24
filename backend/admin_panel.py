@@ -1263,15 +1263,38 @@ def api_option_chain_data():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
         # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
         query_filter = {}
         if start_date:
-            query_filter["records.timestamp"] = {"$gte": start_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         if end_date:
-            if "records.timestamp" in query_filter:
-                query_filter["records.timestamp"]["$lte"] = end_date
-            else:
-                query_filter["records.timestamp"] = {"$lte": end_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         
         # Calculate skip
         skip = (page - 1) * limit
@@ -1286,14 +1309,26 @@ def api_option_chain_data():
         data = []
         for record in records:
             timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
-                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                    "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
             data.append(record_dict)
         
         collector.close()
@@ -1317,6 +1352,13 @@ def api_option_chain_data():
             "success": False,
             "error": str(e)
         }), 500
+
+
+@app.route('/api/nifty/data')
+def api_nifty_data():
+    """API endpoint to get collected NIFTY option chain data with pagination and date filtering (alias for /api/option-chain/data)"""
+    # Redirect to the main option-chain endpoint
+    return api_option_chain_data()
 
 
 @app.route('/api/option-chain/stats')
@@ -1528,15 +1570,38 @@ def api_banknifty_data():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
         # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
         query_filter = {}
         if start_date:
-            query_filter["records.timestamp"] = {"$gte": start_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         if end_date:
-            if "records.timestamp" in query_filter:
-                query_filter["records.timestamp"]["$lte"] = end_date
-            else:
-                query_filter["records.timestamp"] = {"$lte": end_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         
         # Calculate skip
         skip = (page - 1) * limit
@@ -1551,14 +1616,26 @@ def api_banknifty_data():
         data = []
         for record in records:
             timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
-                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                    "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
             data.append(record_dict)
         
         collector.close()
@@ -1828,7 +1905,6 @@ def api_finnifty_status():
 
 
 @app.route('/api/finnifty/data')
-@token_required
 def api_finnifty_data():
     """API endpoint to get collected Finnifty option chain data with pagination and date filtering"""
     try:
@@ -1847,15 +1923,38 @@ def api_finnifty_data():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
         # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
         query_filter = {}
         if start_date:
-            query_filter["records.timestamp"] = {"$gte": start_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         if end_date:
-            if "records.timestamp" in query_filter:
-                query_filter["records.timestamp"]["$lte"] = end_date
-            else:
-                query_filter["records.timestamp"] = {"$lte": end_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         
         # Calculate skip
         skip = (page - 1) * limit
@@ -1870,14 +1969,26 @@ def api_finnifty_data():
         data = []
         for record in records:
             timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
-                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                    "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
             data.append(record_dict)
         
         collector.close()
@@ -2123,28 +2234,9 @@ def api_midcpnifty_status():
 
 
 @app.route('/api/midcpnifty/data')
-@token_required
 def api_midcpnifty_data():
     """API endpoint to get collected MidcapNifty option chain data with pagination and date filtering"""
     try:
-        page, limit = get_pagination_params()
-        
-        # Get date filter parameters
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
-        
-        # Build query filter
-        query_filter = {}
-        if start_date:
-            query_filter["records.timestamp"] = {"$gte": start_date}
-        if end_date:
-            if "records.timestamp" in query_filter:
-                query_filter["records.timestamp"]["$lte"] = end_date
-            else:
-                query_filter["records.timestamp"] = {"$lte": end_date}
-        
-        skip = (page - 1) * limit
-        
         collector, collection = get_index_collection("MIDCPNIFTY")
         if collection is None:
             collector.close()
@@ -2152,6 +2244,49 @@ def api_midcpnifty_data():
                 "success": False,
                 "error": "Collection not found for MIDCPNIFTY"
             }), 404
+        
+        # Get pagination parameters
+        page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
+        # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
+        query_filter = {}
+        if start_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        if end_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        
+        # Calculate skip
+        skip = (page - 1) * limit
         
         # Get total count with filter
         total_count = collection.count_documents(query_filter)
@@ -2162,29 +2297,33 @@ def api_midcpnifty_data():
         # Convert ObjectId to string and format dates
         data = []
         for record in records:
-            records_data = record.get("records", {})
-            if isinstance(records_data, dict):
-                timestamp = records_data.get("timestamp")
-                underlying_value = records_data.get("underlyingValue")
-                data_array = records_data.get("data", [])
+            timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
             else:
-                timestamp = None
-                underlying_value = None
-                data_array = []
-            
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
-            }
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                    "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
             data.append(record_dict)
         
         collector.close()
         
-        total_pages = (total_count + limit - 1) // limit
+        # Calculate pagination info
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
         
         return jsonify({
             "success": True,
@@ -2492,7 +2631,6 @@ def api_hdfcbank_status():
 
 
 @app.route('/api/hdfcbank/data')
-@token_required
 def api_hdfcbank_data():
     """API endpoint to get collected HDFC Bank option chain data with pagination and date filtering"""
     try:
@@ -2511,15 +2649,38 @@ def api_hdfcbank_data():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
         # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
         query_filter = {}
         if start_date:
-            query_filter["records.timestamp"] = {"$gte": start_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         if end_date:
-            if "records.timestamp" in query_filter:
-                query_filter["records.timestamp"]["$lte"] = end_date
-            else:
-                query_filter["records.timestamp"] = {"$lte": end_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         
         # Calculate skip
         skip = (page - 1) * limit
@@ -2534,14 +2695,26 @@ def api_hdfcbank_data():
         data = []
         for record in records:
             timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
-                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                    "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
             data.append(record_dict)
         
         collector.close()
@@ -2789,7 +2962,6 @@ def api_icicibank_status():
 
 
 @app.route('/api/icicibank/data')
-@token_required
 def api_icicibank_data():
     """API endpoint to get collected ICICI Bank option chain data with pagination and date filtering"""
     try:
@@ -2808,15 +2980,38 @@ def api_icicibank_data():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
         # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
         query_filter = {}
         if start_date:
-            query_filter["records.timestamp"] = {"$gte": start_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         if end_date:
-            if "records.timestamp" in query_filter:
-                query_filter["records.timestamp"]["$lte"] = end_date
-            else:
-                query_filter["records.timestamp"] = {"$lte": end_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         
         # Calculate skip
         skip = (page - 1) * limit
@@ -2831,14 +3026,26 @@ def api_icicibank_data():
         data = []
         for record in records:
             timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
-                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                    "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
             data.append(record_dict)
         
         collector.close()
@@ -3094,7 +3301,6 @@ def api_sbin_status():
 
 
 @app.route('/api/sbin/data')
-@token_required
 def api_sbin_data():
     """API endpoint to get collected SBIN option chain data with pagination and date filtering"""
     try:
@@ -3113,15 +3319,38 @@ def api_sbin_data():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
         # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
         query_filter = {}
         if start_date:
-            query_filter["records.timestamp"] = {"$gte": start_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         if end_date:
-            if "records.timestamp" in query_filter:
-                query_filter["records.timestamp"]["$lte"] = end_date
-            else:
-                query_filter["records.timestamp"] = {"$lte": end_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         
         # Calculate skip
         skip = (page - 1) * limit
@@ -3136,14 +3365,26 @@ def api_sbin_data():
         data = []
         for record in records:
             timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
-                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                    "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
             data.append(record_dict)
         
         collector.close()
@@ -3399,7 +3640,6 @@ def api_kotakbank_status():
 
 
 @app.route('/api/kotakbank/data')
-@token_required
 def api_kotakbank_data():
     """API endpoint to get collected Kotak Bank option chain data with pagination and date filtering"""
     try:
@@ -3418,15 +3658,38 @@ def api_kotakbank_data():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
         # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
         query_filter = {}
         if start_date:
-            query_filter["records.timestamp"] = {"$gte": start_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         if end_date:
-            if "records.timestamp" in query_filter:
-                query_filter["records.timestamp"]["$lte"] = end_date
-            else:
-                query_filter["records.timestamp"] = {"$lte": end_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         
         # Calculate skip
         skip = (page - 1) * limit
@@ -3441,14 +3704,26 @@ def api_kotakbank_data():
         data = []
         for record in records:
             timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
-                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                    "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
             data.append(record_dict)
         
         collector.close()
@@ -3704,7 +3979,6 @@ def api_axisbank_status():
 
 
 @app.route('/api/axisbank/data')
-@token_required
 def api_axisbank_data():
     """API endpoint to get collected Axis Bank option chain data with pagination and date filtering"""
     try:
@@ -3723,15 +3997,38 @@ def api_axisbank_data():
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
         # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
         query_filter = {}
         if start_date:
-            query_filter["records.timestamp"] = {"$gte": start_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         if end_date:
-            if "records.timestamp" in query_filter:
-                query_filter["records.timestamp"]["$lte"] = end_date
-            else:
-                query_filter["records.timestamp"] = {"$lte": end_date}
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
         
         # Calculate skip
         skip = (page - 1) * limit
@@ -3746,14 +4043,26 @@ def api_axisbank_data():
         data = []
         for record in records:
             timestamp = record.get("records", {}).get("timestamp") if isinstance(record.get("records"), dict) else None
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
-                "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt")),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"))
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": record.get("records", {}).get("underlyingValue") if isinstance(record.get("records"), dict) else None,
+                    "dataCount": len(record.get("records", {}).get("data", [])) if isinstance(record.get("records"), dict) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt")),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"))
+                }
             data.append(record_dict)
         
         collector.close()
@@ -4009,11 +4318,48 @@ def api_bankbaroda_status():
 
 
 @app.route('/api/bankbaroda/data')
-@token_required
 def api_bankbaroda_data():
-    """API endpoint to get collected Bank of Baroda option chain data with pagination"""
+    """API endpoint to get collected Bank of Baroda option chain data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
+        # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
+        query_filter = {}
+        if start_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        if end_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        
         skip = (page - 1) * limit
         
         collector, collection = get_bank_collection("BANKBARODA")
@@ -4024,11 +4370,11 @@ def api_bankbaroda_data():
                 "error": "Collection not found for BANKBARODA"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4038,14 +4384,26 @@ def api_bankbaroda_data():
             underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
             data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
             
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": underlying_value,
+                    "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
             data.append(record_dict)
         
         collector.close()
@@ -4300,11 +4658,48 @@ def api_pnb_status():
 
 
 @app.route('/api/pnb/data')
-@token_required
 def api_pnb_data():
-    """API endpoint to get collected PNB option chain data with pagination"""
+    """API endpoint to get collected PNB option chain data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
+        # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
+        query_filter = {}
+        if start_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        if end_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        
         skip = (page - 1) * limit
         
         collector, collection = get_bank_collection("PNB")
@@ -4315,11 +4710,11 @@ def api_pnb_data():
                 "error": "Collection not found for PNB"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4329,14 +4724,26 @@ def api_pnb_data():
             underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
             data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
             
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": underlying_value,
+                    "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
             data.append(record_dict)
         
         collector.close()
@@ -4591,11 +4998,48 @@ def api_canbk_status():
 
 
 @app.route('/api/canbk/data')
-@token_required
 def api_canbk_data():
-    """API endpoint to get collected CANBK option chain data with pagination"""
+    """API endpoint to get collected CANBK option chain data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
+        # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
+        query_filter = {}
+        if start_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        if end_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        
         skip = (page - 1) * limit
         
         collector, collection = get_bank_collection("CANBK")
@@ -4606,11 +5050,11 @@ def api_canbk_data():
                 "error": "Collection not found for CANBK"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4620,14 +5064,26 @@ def api_canbk_data():
             underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
             data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
             
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": underlying_value,
+                    "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
             data.append(record_dict)
         
         collector.close()
@@ -4882,11 +5338,48 @@ def api_aubank_status():
 
 
 @app.route('/api/aubank/data')
-@token_required
 def api_aubank_data():
-    """API endpoint to get collected AUBANK option chain data with pagination"""
+    """API endpoint to get collected AUBANK option chain data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
+        # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
+        query_filter = {}
+        if start_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        if end_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        
         skip = (page - 1) * limit
         
         collector, collection = get_bank_collection("AUBANK")
@@ -4897,11 +5390,11 @@ def api_aubank_data():
                 "error": "Collection not found for AUBANK"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -4911,14 +5404,26 @@ def api_aubank_data():
             underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
             data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
             
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": underlying_value,
+                    "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
             data.append(record_dict)
         
         collector.close()
@@ -5173,11 +5678,48 @@ def api_indusindbk_status():
 
 
 @app.route('/api/indusindbk/data')
-@token_required
 def api_indusindbk_data():
-    """API endpoint to get collected INDUSINDBK option chain data with pagination"""
+    """API endpoint to get collected INDUSINDBK option chain data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
+        # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
+        query_filter = {}
+        if start_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        if end_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        
         skip = (page - 1) * limit
         
         collector, collection = get_bank_collection("INDUSINDBK")
@@ -5188,11 +5730,11 @@ def api_indusindbk_data():
                 "error": "Collection not found for INDUSINDBK"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -5202,14 +5744,26 @@ def api_indusindbk_data():
             underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
             data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
             
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": underlying_value,
+                    "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
             data.append(record_dict)
         
         collector.close()
@@ -5464,11 +6018,48 @@ def api_idfcfirstb_status():
 
 
 @app.route('/api/idfcfirstb/data')
-@token_required
 def api_idfcfirstb_data():
-    """API endpoint to get collected IDFCFIRSTB option chain data with pagination"""
+    """API endpoint to get collected IDFCFIRSTB option chain data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
+        # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
+        query_filter = {}
+        if start_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        if end_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        
         skip = (page - 1) * limit
         
         collector, collection = get_bank_collection("IDFCFIRSTB")
@@ -5479,11 +6070,11 @@ def api_idfcfirstb_data():
                 "error": "Collection not found for IDFCFIRSTB"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -5493,14 +6084,26 @@ def api_idfcfirstb_data():
             underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
             data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
             
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": underlying_value,
+                    "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
             data.append(record_dict)
         
         collector.close()
@@ -5755,11 +6358,48 @@ def api_federalbnk_status():
 
 
 @app.route('/api/federalbnk/data')
-@token_required
 def api_federalbnk_data():
-    """API endpoint to get collected FEDERALBNK option chain data with pagination"""
+    """API endpoint to get collected FEDERALBNK option chain data with pagination and date filtering"""
     try:
         page, limit = get_pagination_params()
+        
+        # Get date filter parameters
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Get full data parameter (for algo test and similar use cases)
+        full_data = request.args.get('full', 'false').lower() == 'true'
+        
+        # Build query filter
+        # Use insertedAt (datetime) for date filtering instead of records.timestamp (string)
+        # This allows proper date range queries with YYYY-MM-DD format
+        query_filter = {}
+        if start_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
+                # Set to start of day (UTC)
+                start_datetime = start_datetime.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                query_filter["insertedAt"] = {"$gte": start_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        if end_date:
+            try:
+                # Convert YYYY-MM-DD to datetime for insertedAt comparison
+                end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+                # Set to end of day (UTC)
+                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, microsecond=999999)
+                end_datetime = end_datetime.replace(tzinfo=timezone.utc)
+                if "insertedAt" in query_filter:
+                    query_filter["insertedAt"]["$lte"] = end_datetime
+                else:
+                    query_filter["insertedAt"] = {"$lte": end_datetime}
+            except ValueError:
+                # Fallback: if date parsing fails, skip date filter
+                pass
+        
         skip = (page - 1) * limit
         
         collector, collection = get_bank_collection("FEDERALBNK")
@@ -5770,11 +6410,11 @@ def api_federalbnk_data():
                 "error": "Collection not found for FEDERALBNK"
             }), 404
         
-        # Get total count
-        total_count = collection.count_documents({})
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
         
-        # Get paginated records sorted by timestamp (newest first)
-        records = list(collection.find().sort("insertedAt", -1).skip(skip).limit(limit))
+        # Get paginated records sorted by insertedAt (datetime) instead of records.timestamp (string) for correct chronological order
+        records = list(collection.find(query_filter).sort("insertedAt", -1).skip(skip).limit(limit))
         
         # Convert ObjectId to string and format dates
         data = []
@@ -5784,14 +6424,26 @@ def api_federalbnk_data():
             underlying_value = records_data.get("underlyingValue") if isinstance(records_data, dict) else None
             data_array = records_data.get("data", []) if isinstance(records_data, dict) else []
             
-            record_dict = {
-                "_id": str(record.get("_id")),
-                "timestamp": timestamp,
-                "underlyingValue": underlying_value,
-                "dataCount": len(data_array) if isinstance(data_array, list) else 0,
-                "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
-                "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
-            }
+            if full_data:
+                # Return full record data including option chain
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "records": record.get("records", {}),
+                    "filtered": record.get("filtered", {}),
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
+            else:
+                # Return summary only
+                record_dict = {
+                    "_id": str(record.get("_id")),
+                    "timestamp": timestamp,
+                    "underlyingValue": underlying_value,
+                    "dataCount": len(data_array) if isinstance(data_array, list) else 0,
+                    "insertedAt": format_datetime_for_json(record.get("insertedAt"), is_utc=True),
+                    "updatedAt": format_datetime_for_json(record.get("updatedAt"), is_utc=True)
+                }
             data.append(record_dict)
         
         collector.close()
@@ -7612,6 +8264,152 @@ if AUTO_START_SCHEDULERS:
         logger.error(f"Failed to auto-start schedulers: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
+
+@app.route('/api/yahoo-finance/ohlc', methods=['GET'])
+def api_yahoo_finance_ohlc():
+    """
+    Fetch Yahoo Finance OHLC data for a symbol
+    Returns 5min and 15min OHLC data (or 1min if interval=1m specified)
+    
+    Parameters:
+    - symbol: Yahoo Finance symbol (required)
+    - date: Date in YYYY-MM-DD format (optional, defaults to today)
+    - end_time: Time in HH:MM format to filter data up to (optional)
+    - past_day: If true, fetch past day data (9:15 to 15:30) (optional)
+    - interval: Interval for data (1m, 5m, 15m). If 1m specified, only returns 1m data (optional)
+    """
+    try:
+        symbol = request.args.get('symbol')
+        if not symbol:
+            return jsonify({
+                "success": False,
+                "error": "Symbol parameter is required"
+            }), 400
+        
+        # Try to import yfinance
+        try:
+            import yfinance as yf
+        except ImportError:
+            return jsonify({
+                "success": False,
+                "error": "yfinance library not installed. Install with: pip install yfinance"
+            }), 500
+        
+        # Get date and time parameters
+        date_str = request.args.get('date')
+        end_time_str = request.args.get('end_time')  # Format: HH:MM
+        past_day = request.args.get('past_day', 'false').lower() == 'true'
+        interval = request.args.get('interval', '5m,15m')  # Default: 5m and 15m, or can be '1m'
+        
+        # Create ticker object
+        ticker = yf.Ticker(symbol)
+        
+        from datetime import timedelta
+        
+        # Determine date range
+        if date_str:
+            try:
+                target_date = datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                return jsonify({
+                    "success": False,
+                    "error": "Invalid date format. Use YYYY-MM-DD"
+                }), 400
+        else:
+            target_date = datetime.now()
+        
+        # For past day: fetch previous trading day (9:15 to 15:30)
+        # For current day: fetch today (9:15 to end_time)
+        if past_day:
+            # Get previous day
+            prev_date = target_date - timedelta(days=1)
+            target_date_for_fetch = prev_date
+            start_time = datetime.strptime("09:15", "%H:%M").time()
+            end_time = datetime.strptime("15:30", "%H:%M").time()
+        else:
+            # Current day: 9:15 to end_time (or 15:30 if no end_time)
+            target_date_for_fetch = target_date
+            start_time = datetime.strptime("09:15", "%H:%M").time()
+            if end_time_str:
+                try:
+                    end_time = datetime.strptime(end_time_str, "%H:%M").time()
+                except ValueError:
+                    end_time = datetime.strptime("15:30", "%H:%M").time()
+            else:
+                end_time = datetime.strptime("15:30", "%H:%M").time()
+        
+        # Fetch data - fetch 2 days to ensure we get the data
+        start_fetch = target_date_for_fetch - timedelta(days=1)
+        end_fetch = target_date_for_fetch + timedelta(days=1)
+        
+        # Convert to list of dictionaries and filter by date and time range
+        def format_ohlc_data(df, interval_str, target_dt, start_t, end_t):
+            if df.empty:
+                return []
+            
+            result = []
+            for index, row in df.iterrows():
+                # Convert index to datetime
+                if hasattr(index, 'to_pydatetime'):
+                    dt = index.to_pydatetime()
+                elif hasattr(index, 'timestamp'):
+                    dt = datetime.fromtimestamp(index.timestamp())
+                else:
+                    try:
+                        dt = datetime.fromisoformat(str(index))
+                    except:
+                        continue
+                
+                # Check if date matches target date
+                if dt.date() == target_dt.date():
+                    # Check if time is within range (9:15 to end_time)
+                    if start_t <= dt.time() <= end_t:
+                        result.append({
+                            "timestamp": dt.isoformat(),
+                            "open": float(row['Open']) if 'Open' in row else 0,
+                            "high": float(row['High']) if 'High' in row else 0,
+                            "low": float(row['Low']) if 'Low' in row else 0,
+                            "close": float(row['Close']) if 'Close' in row else 0,
+                            "volume": int(row['Volume']) if 'Volume' in row else 0,
+                            "interval": interval_str
+                        })
+            return result
+        
+        # Fetch data based on interval parameter
+        response_data = {}
+        if interval == '1m':
+            # Fetch only 1-minute data
+            data_1min = ticker.history(start=start_fetch, end=end_fetch, interval="1m")
+            ohlc_1min = format_ohlc_data(data_1min, "1m", target_date_for_fetch, start_time, end_time)
+            response_data["1min"] = ohlc_1min
+        else:
+            # Default: fetch 5min and 15min
+            data_5min = ticker.history(start=start_fetch, end=end_fetch, interval="5m")
+            data_15min = ticker.history(start=start_fetch, end=end_fetch, interval="15m")
+            ohlc_5min = format_ohlc_data(data_5min, "5m", target_date_for_fetch, start_time, end_time)
+            ohlc_15min = format_ohlc_data(data_15min, "15m", target_date_for_fetch, start_time, end_time)
+            response_data["5min"] = ohlc_5min
+            response_data["15min"] = ohlc_15min
+        
+        return jsonify({
+            "success": True,
+            "symbol": symbol,
+            "date": date_str or target_date.strftime("%Y-%m-%d"),
+            "start_time": start_time.strftime("%H:%M"),
+            "end_time": end_time.strftime("%H:%M"),
+            "past_day": past_day,
+            "data": response_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching Yahoo Finance data: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 
 if __name__ == '__main__':
     print("=" * 80)

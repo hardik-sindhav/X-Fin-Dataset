@@ -85,13 +85,79 @@ def fetch_option_chain(expiry: str) -> Dict[str, Any]:
 
 
 def upsert_chain(coll: Collection, data: Dict[str, Any]) -> str:
-    """Upsert the option-chain payload keyed by ASON.DT_TM. Returns the timestamp."""
+    """
+    Insert the option-chain payload using insert time as unique identifier.
+    Always inserts a new record with insertedAt timestamp to ensure uniqueness.
+    Sets default values for records.timestamp and records.expiry when null to avoid unique index conflicts.
+    Returns the DT_TM timestamp.
+    """
+    # Get ASON.DT_TM for logging
     dt_tm = (data.get("ASON") or {}).get("DT_TM", "")
     dt_tm = dt_tm.strip() if isinstance(dt_tm, str) else ""
+    
     if not dt_tm:
         raise ValueError("Missing ASON.DT_TM in option-chain payload")
-    coll.replace_one({"ASON.DT_TM": dt_tm}, data, upsert=True)
-    return dt_tm
+    
+    # Create a deep copy of data to modify
+    import copy
+    data_to_insert = copy.deepcopy(data)
+    
+    # Get records.timestamp and records.expiry
+    records = data_to_insert.get("records", {})
+    if not isinstance(records, dict):
+        records = {}
+        data_to_insert["records"] = records
+    
+    timestamp = records.get("timestamp")
+    expiry = records.get("expiry")
+    
+    # If timestamp or expiry are null, set them to unique values based on insert time
+    # This prevents duplicate key errors on the unique index
+    inserted_at = dt.datetime.utcnow()
+    inserted_at_str = inserted_at.isoformat()
+    
+    if timestamp is None:
+        # Use insert time as timestamp to make it unique
+        records["timestamp"] = inserted_at_str
+        print(f"[{dt.datetime.now()}] Setting null timestamp to insert time: {inserted_at_str}")
+    
+    if expiry is None:
+        # Use insert time + small offset as expiry to make it unique
+        # Add microseconds to ensure uniqueness
+        expiry_str = f"{inserted_at_str}_expiry"
+        records["expiry"] = expiry_str
+        print(f"[{dt.datetime.now()}] Setting null expiry to unique value: {expiry_str}")
+    
+    # Add insertedAt timestamp to track when record was inserted
+    data_to_insert["insertedAt"] = inserted_at
+    data_to_insert["insertedAtLocal"] = dt.datetime.now().isoformat()
+    
+    # Always insert a new record
+    try:
+        result = coll.insert_one(data_to_insert)
+        
+        # Verify the record was actually inserted
+        if result.inserted_id:
+            inserted_record = coll.find_one({"_id": result.inserted_id})
+            if inserted_record:
+                print(f"[{dt.datetime.now()}] ✅ Successfully inserted new record: ASON.DT_TM={dt_tm}, _id={result.inserted_id}, insertedAt={inserted_at}")
+                return dt_tm
+            else:
+                print(f"[{dt.datetime.now()}] ⚠️ Warning: Insert reported success but record not found: ASON.DT_TM={dt_tm}, _id={result.inserted_id}")
+                return dt_tm
+        else:
+            print(f"[{dt.datetime.now()}] ❌ Error: Insert failed - no inserted_id returned: ASON.DT_TM={dt_tm}")
+            raise ValueError("Insert failed - no inserted_id returned")
+    except Exception as e:
+        # If duplicate key error still occurs, log it but don't crash
+        if "duplicate key" in str(e).lower() or "E11000" in str(e):
+            print(f"[{dt.datetime.now()}] ❌ Duplicate key error (should not happen with unique timestamps): ASON.DT_TM={dt_tm}, error={e}")
+            # Return dt_tm to avoid breaking the scheduler
+            return dt_tm
+        else:
+            # Re-raise if it's not a duplicate key error
+            print(f"[{dt.datetime.now()}] ❌ Unexpected error: {e}")
+            raise
 
 
 def update_status(last_status: str, error: str | None = None, dt_tm: str | None = None) -> None:
@@ -116,7 +182,24 @@ def run_once(coll: Collection) -> None:
     """Run a single poll + upsert cycle."""
     expiry = fetch_first_expiry()
     chain = fetch_option_chain(expiry)
+    
+    # Log collection stats before insert
+    total_before = coll.count_documents({})
+    print(f"[{dt.datetime.now()}] Collection stats before insert: total records={total_before}")
+    
     dt_tm = upsert_chain(coll, chain)
+    
+    # Log collection stats after insert
+    total_after = coll.count_documents({})
+    print(f"[{dt.datetime.now()}] Collection stats after insert: total records={total_after} (change: {total_after - total_before})")
+    
+    # Verify the record exists
+    saved_record = coll.find_one({"ASON.DT_TM": dt_tm})
+    if saved_record:
+        print(f"[{dt.datetime.now()}] ✅ Verified record exists in DB: ASON.DT_TM={dt_tm}, _id={saved_record.get('_id')}")
+    else:
+        print(f"[{dt.datetime.now()}] ❌ ERROR: Record not found in DB after insert: ASON.DT_TM={dt_tm}")
+    
     print(f"[{dt.datetime.now()}] Stored option chain for expiry={expiry} DT_TM={dt_tm}")
     update_status("success", dt_tm=dt_tm)
 

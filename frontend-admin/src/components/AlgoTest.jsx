@@ -24,6 +24,23 @@ const AlgoTest = () => {
     { value: 'federalbnk', label: 'Federal Bank' }
   ]
 
+  // Lot sizes per instrument (shares per lot)
+  const lotSizes = {
+    'banknifty': 35,
+    'nifty': 75,
+    'midcpnifty': 140,
+    'finnifty': 65,
+    'hdfcbank': 550,
+    'icicibank': 700,
+    // Default for others
+    'default': 300
+  }
+
+  // Get lot size for selected chain
+  const getLotSize = () => {
+    return lotSizes[selectedChain] || lotSizes.default
+  }
+
   const [selectedChain, setSelectedChain] = useState('nifty')
   const [dateType, setDateType] = useState('today') // 'today', 'yesterday', 'range'
   const [startDate, setStartDate] = useState('')
@@ -66,20 +83,21 @@ const AlgoTest = () => {
           setLoading(false)
           return
         }
-        url += `?start_date=${dateValue.startDate}&end_date=${dateValue.endDate}&limit=1000`
+        url += `?start_date=${dateValue.startDate}&end_date=${dateValue.endDate}&limit=1000&full=true`
       } else {
         // For today/yesterday, use the same date as both start and end
-        url += `?start_date=${dateValue}&end_date=${dateValue}&limit=1000`
+        url += `?start_date=${dateValue}&end_date=${dateValue}&limit=1000&full=true`
       }
 
       const response = await axios.get(url)
       const fetchedData = response.data.data || response.data || []
 
-      // Sort by timestamp/date if available
+      // Sort by insertedAt (datetime) for chronological order (oldest first)
+      // This ensures proper chronological processing of the data
       const sortedData = fetchedData.sort((a, b) => {
-        const dateA = new Date(a.timestamp || a.date || a.createdAt || 0)
-        const dateB = new Date(b.timestamp || b.date || b.createdAt || 0)
-        return dateA - dateB
+        const dateA = new Date(a.insertedAt || a.records?.timestamp || a.timestamp || a.date || a.createdAt || 0)
+        const dateB = new Date(b.insertedAt || b.records?.timestamp || b.timestamp || b.date || b.createdAt || 0)
+        return dateA - dateB  // Ascending order (oldest first)
       })
 
       setData(sortedData)
@@ -105,8 +123,20 @@ const AlgoTest = () => {
 
   // Extract option chain data from record
   const extractOptionChainData = (record) => {
-    // Handle different data structures
-    const optionData = record.data || record.optionChain || record.option_chain || record
+    // Handle different data structures - the API returns records.records.data
+    let optionData = null
+    
+    if (record.records && record.records.data && Array.isArray(record.records.data)) {
+      optionData = record.records.data
+    } else if (record.data && Array.isArray(record.data)) {
+      optionData = record.data
+    } else if (record.optionChain && Array.isArray(record.optionChain)) {
+      optionData = record.optionChain
+    } else if (record.option_chain && Array.isArray(record.option_chain)) {
+      optionData = record.option_chain
+    } else if (Array.isArray(record)) {
+      optionData = record
+    }
     
     if (!optionData || !Array.isArray(optionData)) {
       return []
@@ -164,8 +194,11 @@ const AlgoTest = () => {
       const optionData = extractOptionChainData(record)
       if (optionData.length > 0) {
         // Get underlying price if available
-        const underlyingPrice = record.underlyingPrice || record.underlying_price || 
-                               record.underlying || record.spot || null
+        const underlyingPrice = record.records?.underlyingValue || 
+                               record.underlyingPrice || 
+                               record.underlying_price || 
+                               record.underlying || 
+                               record.spot || null
         
         // Find ATM strike
         const atmStrike = findATMStrike(optionData, underlyingPrice)
@@ -195,26 +228,34 @@ const AlgoTest = () => {
     const totalCallOI = allStrikes.reduce((sum, s) => sum + s.ceOI, 0)
     const totalPutOI = allStrikes.reduce((sum, s) => sum + s.peOI, 0)
 
+    // Logic: If Call OI > Put OI, buy Put side (PE)
+    //        If Put OI > Call OI, buy Call side (CE)
+    const shouldTrade = totalCallOI !== totalPutOI
+    const buyPutSide = totalCallOI > totalPutOI
+    const buyCallSide = totalPutOI > totalCallOI
+
     setCurrentGroup({
       groupIndex,
       first4Records,
       allStrikes,
       totalCallOI,
       totalPutOI,
-      shouldTrade: totalCallOI > totalPutOI
+      shouldTrade,
+      buyPutSide,
+      buyCallSide
     })
 
-    // If Call OI > Put OI, calculate trades for next 6 records
-    if (totalCallOI > totalPutOI && group.length >= 10) {
+    // If OI difference exists, calculate trades for next 6 records
+    if (shouldTrade && group.length >= 10) {
       const next6Records = group.slice(4, 10)
-      calculateTrades(next6Records, first4Records[first4Records.length - 1])
+      calculateTrades(next6Records, first4Records[first4Records.length - 1], buyPutSide)
     } else {
       setTrades([])
     }
   }
 
   // Calculate trades (ATM, OTM, ITM) and PNL
-  const calculateTrades = (records, baseRecord) => {
+  const calculateTrades = (records, baseRecord, buyPutSide) => {
     const baseOptionData = extractOptionChainData(baseRecord)
     if (baseOptionData.length === 0) {
       setTrades([])
@@ -222,8 +263,11 @@ const AlgoTest = () => {
     }
 
     // Get underlying price from base record
-    const underlyingPrice = baseRecord.underlyingPrice || baseRecord.underlying_price || 
-                           baseRecord.underlying || baseRecord.spot || null
+    const underlyingPrice = baseRecord.records?.underlyingValue ||
+                         baseRecord.underlyingPrice || 
+                         baseRecord.underlying_price || 
+                         baseRecord.underlying || 
+                         baseRecord.spot || null
 
     // Find ATM strike
     const atmStrikeData = findATMStrike(baseOptionData, underlyingPrice)
@@ -239,46 +283,57 @@ const AlgoTest = () => {
     const itmStrike = atmIndex > 0 ? sortedStrikes[atmIndex - 1] : null
     const otmStrike = atmIndex < sortedStrikes.length - 1 ? sortedStrikes[atmIndex + 1] : null
 
+    const lotSize = getLotSize() // shares per lot for the selected instrument
     const tradePositions = []
+    const optionType = buyPutSide ? 'PE' : 'CE'
     
-    // ATM Call position
+    // ATM position
     if (atmStrikeData) {
       tradePositions.push({
         type: 'ATM',
         strike: atmStrikeData.strike,
-        optionType: 'CE',
-        entryPrice: atmStrikeData.ceLTP,
+        optionType: optionType,
+        entryPrice: buyPutSide ? atmStrikeData.peLTP : atmStrikeData.ceLTP,
         lotSize: 1
       })
     }
 
-    // ITM Call position
+    // ITM position
     if (itmStrike) {
       tradePositions.push({
         type: 'ITM',
         strike: itmStrike.strike,
-        optionType: 'CE',
-        entryPrice: itmStrike.ceLTP,
+        optionType: optionType,
+        entryPrice: buyPutSide ? itmStrike.peLTP : itmStrike.ceLTP,
         lotSize: 1
       })
     }
 
-    // OTM Call position
+    // OTM position
     if (otmStrike) {
       tradePositions.push({
         type: 'OTM',
         strike: otmStrike.strike,
-        optionType: 'CE',
-        entryPrice: otmStrike.ceLTP,
+        optionType: optionType,
+        entryPrice: buyPutSide ? otmStrike.peLTP : otmStrike.ceLTP,
         lotSize: 1
       })
     }
 
+    // Calculate total invested amount (entry price * shares)
+    const totalInvested = tradePositions.reduce(
+      (sum, trade) => sum + (trade.entryPrice * lotSize * trade.lotSize),
+      0
+    )
+
     // Calculate PNL for each record in next 6
     const tradesWithPNL = records.map((record, recordIndex) => {
       const recordOptionData = extractOptionChainData(record)
-      const recordUnderlyingPrice = record.underlyingPrice || record.underlying_price || 
-                                   record.underlying || record.spot || null
+      const recordUnderlyingPrice = record.records?.underlyingValue ||
+                                   record.underlyingPrice || 
+                                   record.underlying_price || 
+                                   record.underlying || 
+                                   record.spot || null
 
       const pnlTrades = tradePositions.map(trade => {
         // Find matching strike in current record
@@ -293,10 +348,10 @@ const AlgoTest = () => {
           }
         }
 
-        const exitPrice = currentStrikeData.ceLTP
-        // PNL calculation: (Exit Price - Entry Price) * Lot Size * Multiplier
-        // For NIFTY/BankNifty: 1 lot = 50 shares, so multiplier is 50
-        const pnl = (exitPrice - trade.entryPrice) * trade.lotSize * 50
+        const exitPrice = buyPutSide ? currentStrikeData.peLTP : currentStrikeData.ceLTP
+        const shares = lotSize * trade.lotSize
+        // PNL calculation: (Exit Price - Entry Price) * shares
+        const pnl = (exitPrice - trade.entryPrice) * shares
         const pnlPercent = trade.entryPrice > 0 ? ((exitPrice - trade.entryPrice) / trade.entryPrice) * 100 : 0
 
         return {
@@ -304,16 +359,23 @@ const AlgoTest = () => {
           exitPrice,
           pnl,
           pnlPercent,
-          timestamp: record.timestamp || record.date || record.createdAt
+          shares,
+          invested: trade.entryPrice * shares,
+          timestamp: record.records?.timestamp || record.timestamp || record.date || record.createdAt
         }
       })
 
+      const totalPNL = pnlTrades.reduce((sum, t) => sum + t.pnl, 0)
+      const returnPercent = totalInvested > 0 ? (totalPNL / totalInvested) * 100 : 0
+
       return {
         recordIndex: recordIndex + 4, // Offset by 4 (first 4 records)
-        timestamp: record.timestamp || record.date || record.createdAt,
+        timestamp: record.records?.timestamp || record.timestamp || record.date || record.createdAt,
         underlyingPrice: recordUnderlyingPrice,
         trades: pnlTrades,
-        totalPNL: pnlTrades.reduce((sum, t) => sum + t.pnl, 0)
+        totalPNL,
+        totalInvested,
+        returnPercent
       }
     })
 
@@ -465,14 +527,30 @@ const AlgoTest = () => {
                 <div className="summary-item">
                   <label>Decision:</label>
                   <span className={`value ${currentGroup.shouldTrade ? 'trade-yes' : 'trade-no'}`}>
-                    {currentGroup.shouldTrade ? 'TRADE (Call OI > Put OI)' : 'NO TRADE (Call OI ≤ Put OI)'}
+                    {currentGroup.shouldTrade 
+                      ? (currentGroup.buyPutSide ? 'BUY PUT (Call OI > Put OI)' : 'BUY CALL (Put OI > Call OI)')
+                      : 'NO TRADE (Call OI = Put OI)'}
                   </span>
                 </div>
+                {currentGroup.shouldTrade && trades.length > 0 && trades[0].totalInvested && (
+                  <div className="summary-item">
+                    <label>Lot Size:</label>
+                    <span className="value">{getLotSize()} shares/lot</span>
+                  </div>
+                )}
               </div>
 
               {currentGroup.shouldTrade && trades.length > 0 && (
                 <div className="trades-section">
-                  <h4>Trades (1 Lot Each)</h4>
+                  <h4>Trades (1 Lot Each - {getLotSize()} shares/lot)</h4>
+                  {trades[0].totalInvested && (
+                    <div className="investment-summary">
+                      <div className="summary-card">
+                        <label>Total Invested:</label>
+                        <span className="value">₹{formatNumber(trades[0].totalInvested)}</span>
+                      </div>
+                    </div>
+                  )}
                   <div className="trades-table-container">
                     <table className="trades-table">
                       <thead>
@@ -480,11 +558,14 @@ const AlgoTest = () => {
                           <th>Record</th>
                           <th>Timestamp</th>
                           <th>Type</th>
+                          <th>Option</th>
                           <th>Strike</th>
-                          <th>Entry Price</th>
-                          <th>Exit Price</th>
+                          <th>Shares</th>
+                          <th>Entry</th>
+                          <th>Exit</th>
+                          <th>Invested</th>
                           <th>PNL</th>
-                          <th>PNL %</th>
+                          <th>Return %</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -507,11 +588,18 @@ const AlgoTest = () => {
                                     {trade.type}
                                   </span>
                                 </td>
+                                <td>
+                                  <span className={`option-type ${trade.optionType.toLowerCase()}`}>
+                                    {trade.optionType}
+                                  </span>
+                                </td>
                                 <td>{formatNumber(trade.strike)}</td>
-                                <td>{formatNumber(trade.entryPrice)}</td>
-                                <td>{formatNumber(trade.exitPrice)}</td>
+                                <td>{formatNumber(trade.shares)}</td>
+                                <td>₹{formatNumber(trade.entryPrice)}</td>
+                                <td>₹{formatNumber(trade.exitPrice)}</td>
+                                <td>₹{formatNumber(trade.invested)}</td>
                                 <td className={trade.pnl >= 0 ? 'profit' : 'loss'}>
-                                  {formatNumber(trade.pnl)}
+                                  ₹{formatNumber(trade.pnl)}
                                   {trade.pnl >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                 </td>
                                 <td className={trade.pnlPercent >= 0 ? 'profit' : 'loss'}>
@@ -520,11 +608,14 @@ const AlgoTest = () => {
                               </tr>
                             ))}
                             <tr className="total-row">
-                              <td colSpan="6" style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                              <td colSpan="9" style={{ textAlign: 'right', fontWeight: 'bold' }}>
                                 Total PNL:
                               </td>
-                              <td className={tradeGroup.totalPNL >= 0 ? 'profit' : 'loss'} colSpan="2">
-                                {formatNumber(tradeGroup.totalPNL)}
+                              <td className={tradeGroup.totalPNL >= 0 ? 'profit' : 'loss'} style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                                ₹{formatNumber(tradeGroup.totalPNL)}
+                              </td>
+                              <td className={tradeGroup.returnPercent >= 0 ? 'profit' : 'loss'} style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                                {formatNumber(tradeGroup.returnPercent)}%
                               </td>
                             </tr>
                           </React.Fragment>
@@ -683,6 +774,49 @@ const AlgoTest = () => {
         .trade-type.otm {
           background: #6c757d;
           color: #fff;
+        }
+
+        .option-type {
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-weight: 600;
+          font-size: 11px;
+          display: inline-block;
+        }
+
+        .option-type.ce {
+          background: #28a745;
+          color: #fff;
+        }
+
+        .option-type.pe {
+          background: #dc3545;
+          color: #fff;
+        }
+
+        .investment-summary {
+          margin-bottom: 15px;
+          padding: 15px;
+          background: #e9ecef;
+          border-radius: 8px;
+        }
+
+        .summary-card {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .summary-card label {
+          font-weight: 600;
+          color: #333;
+          font-size: 14px;
+        }
+
+        .summary-card .value {
+          font-size: 18px;
+          font-weight: bold;
+          color: #333;
         }
 
         .profit {

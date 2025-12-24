@@ -23,7 +23,8 @@ import {
   Trash2,
   Filter,
   Calendar,
-  Download
+  Download,
+  FileDown
 } from 'lucide-react'
 import Login from './components/Login'
 import Settings from './components/Settings'
@@ -31,6 +32,10 @@ import DetailView from './components/DetailView'
 import HeatmapView from './components/HeatmapView'
 import Backup from './components/Backup'
 import AlgoTest from './components/AlgoTest'
+import AlgoManual from './components/AlgoManual'
+import ExportData from './components/ExportData'
+import Algo1Min from './components/Algo1Min'
+import Algo1MinV2 from './components/Algo1MinV2'
 import './App.css'
 
 import { API_BASE } from './config'
@@ -41,7 +46,7 @@ function App() {
   const [authToken, setAuthToken] = useState(null)
   const [username, setUsername] = useState('')
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
-  const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'gainers', 'losers', 'news', 'livemint-news', 'algo-test'
+  const [activeTab, setActiveTab] = useState('fiidii') // 'fiidii', 'option-chain', 'banknifty', 'finnifty', 'midcpnifty', 'hdfcbank', 'icicibank', 'sbin', 'kotakbank', 'axisbank', 'bankbaroda', 'pnb', 'canbk', 'aubank', 'indusindbk', 'idfcfirstb', 'federalbnk', 'gainers', 'losers', 'news', 'livemint-news', 'algo-test', 'algo-manual', 'algo-1min'
   
   // FII/DII state
   const [status, setStatus] = useState(null)
@@ -1827,6 +1832,52 @@ function App() {
             >
               <Activity size={20} />
               Algo Test
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'algo-manual' ? 'active' : ''}`}
+              onClick={() => {
+                handleTabChange('algo-manual')
+                setSidebarOpen(false)
+              }}
+            >
+              <Activity size={20} />
+              Algo Manual
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'algo-1min' ? 'active' : ''}`}
+              onClick={() => {
+                handleTabChange('algo-1min')
+                setSidebarOpen(false)
+              }}
+            >
+              <Activity size={20} />
+              1 Min Algo
+            </li>
+            <li 
+              className={`sidebar-item ${activeTab === 'algo-1min-v2' ? 'active' : ''}`}
+              onClick={() => {
+                handleTabChange('algo-1min-v2')
+                setSidebarOpen(false)
+              }}
+            >
+              <Activity size={20} />
+              1 Min Algo V2
+            </li>
+          </ul>
+        </div>
+
+        <div className="sidebar-section">
+          <div className="sidebar-section-title">Data Export</div>
+          <ul className="sidebar-menu">
+            <li 
+              className={`sidebar-item ${activeTab === 'export-data' ? 'active' : ''}`}
+              onClick={() => {
+                handleTabChange('export-data')
+                setSidebarOpen(false)
+              }}
+            >
+              <FileDown size={20} />
+              Export Data
             </li>
           </ul>
         </div>
@@ -5586,6 +5637,14 @@ function App() {
           <Backup authToken={authToken} />
         ) : activeTab === 'algo-test' ? (
           <AlgoTest />
+        ) : activeTab === 'algo-manual' ? (
+          <AlgoManual />
+        ) : activeTab === 'algo-1min' ? (
+          <Algo1Min />
+        ) : activeTab === 'algo-1min-v2' ? (
+          <Algo1MinV2 />
+        ) : activeTab === 'export-data' ? (
+          <ExportData />
         ) : activeTab === 'livemint-news' ? (
           <>
             {/* LiveMint News Collector Status Card */}
